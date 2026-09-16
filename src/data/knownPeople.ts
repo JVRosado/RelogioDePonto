@@ -5,20 +5,12 @@ import type { KnownPerson } from "../lib/faceRecognition";
  * cadastro). Para adicionar alguém: coloque uma foto do rosto em
  * public/known-faces/ e acrescente uma entrada aqui apontando pra ela.
  *
- * As fotos em public/known-faces/ não vão pro repositório (.gitignore) por
- * serem dados pessoais — cada pessoa que clonar o projeto precisa colocar
- * suas próprias fotos de teste localmente.
+ * As fotos em public/known-faces/ vão pro repositório e ficam públicas no
+ * site publicado (decisão consciente para este protótipo).
  */
 const KNOWN_FACES_URL = `${import.meta.env.BASE_URL}known-faces`;
 
 export const KNOWN_PEOPLE: KnownPerson[] = [
-  {
-    id: "ana-beatriz-costa",
-    name: "Ana Beatriz Costa",
-    role: "Analista de RH",
-    matricula: "#1042",
-    image: `${KNOWN_FACES_URL}/ana-beatriz-costa.jpg`,
-  },
   {
     id: "joao-vitor",
     name: "João Vitor",
