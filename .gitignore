@@ -37,3 +37,7 @@ Thumbs.db
 
 # Testing / coverage
 coverage/
+
+# Fotos de referência (dados pessoais) - ficam só localmente
+public/known-faces/*
+!public/known-faces/.gitkeep

@@ -1,6 +1,6 @@
 import * as faceapi from "@vladmandic/face-api";
 
-const MODEL_URL = "/models";
+const MODEL_URL = `${import.meta.env.BASE_URL}models`;
 
 // Distância máxima (0 a 1) para considerar duas faces como a mesma pessoa.
 // Quanto menor, mais rigorosa a comparação.

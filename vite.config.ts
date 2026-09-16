@@ -17,6 +17,8 @@ function figmaAssetResolver() {
 }
 
 export default defineConfig({
+  // Necessário pro GitHub Pages, que publica em https://<usuario>.github.io/<repo>/
+  base: '/RelogioDePonto/',
   plugins: [
     figmaAssetResolver(),
     // The React and Tailwind plugins are both required for Make, even if
