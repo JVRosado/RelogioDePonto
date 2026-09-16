@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { Toaster, toast } from "sonner";
 import {
   CheckCircle,
   Clock,
@@ -11,7 +12,12 @@ import {
   Shield,
   AlertCircle,
   ChevronRight,
+  Camera,
+  ImageUp,
+  Loader2,
 } from "lucide-react";
+import { loadFaceModels, initKnownFaces, recognizeFace, type KnownPerson } from "../lib/faceRecognition";
+import { KNOWN_PEOPLE } from "../data/knownPeople";
 
 type Step = "camera" | "recognizing" | "confirmed" | "punchType" | "mood" | "summary";
 
@@ -80,36 +86,26 @@ function ScanLine() {
   );
 }
 
-function FaceFrame({ scanning }: { scanning: boolean }) {
+function ScanOverlay({ scanning }: { scanning: boolean }) {
   return (
-    <div className="relative w-64 h-64 mx-auto">
-      {/* Corner brackets */}
+    <>
       <div className="absolute top-0 left-0 w-10 h-10 border-t-4 border-l-4 border-accent rounded-tl-lg" />
       <div className="absolute top-0 right-0 w-10 h-10 border-t-4 border-r-4 border-accent rounded-tr-lg" />
       <div className="absolute bottom-0 left-0 w-10 h-10 border-b-4 border-l-4 border-accent rounded-bl-lg" />
       <div className="absolute bottom-0 right-0 w-10 h-10 border-b-4 border-r-4 border-accent rounded-br-lg" />
-
-      {/* Face silhouette oval */}
-      <div className="absolute inset-6 rounded-full border-2 border-dashed border-primary/30 flex items-center justify-center overflow-hidden">
-        {scanning && <ScanLine />}
-        <motion.div
-          animate={scanning ? { scale: [1, 1.03, 1] } : {}}
-          transition={{ duration: 1.2, repeat: Infinity }}
-          className="text-7xl select-none"
-        >
-          👤
-        </motion.div>
-      </div>
-
-      {/* Pulse ring */}
       {scanning && (
-        <motion.div
-          className="absolute inset-0 rounded-full border-2 border-accent/40"
-          animate={{ scale: [1, 1.15], opacity: [0.6, 0] }}
-          transition={{ duration: 1.4, repeat: Infinity }}
-        />
+        <>
+          <div className="absolute inset-6 rounded-full border-2 border-dashed border-white/60 overflow-hidden">
+            <ScanLine />
+          </div>
+          <motion.div
+            className="absolute inset-0 rounded-full border-2 border-accent/60"
+            animate={{ scale: [1, 1.15], opacity: [0.6, 0] }}
+            transition={{ duration: 1.4, repeat: Infinity }}
+          />
+        </>
       )}
-    </div>
+    </>
   );
 }
 
@@ -155,6 +151,8 @@ function ProgressBar({ step }: { step: Step }) {
   );
 }
 
+type ScanMode = "camera" | "upload";
+
 export default function App() {
   const [step, setStep] = useState<Step>("camera");
   const [scanProgress, setScanProgress] = useState(0);
@@ -163,33 +161,147 @@ export default function App() {
   const [currentTime, setCurrentTime] = useState(formatTime());
   const [registrationTime, setRegistrationTime] = useState("");
   const [done, setDone] = useState(false);
-  const scanInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const [mode, setMode] = useState<ScanMode>("camera");
+  const [modelsReady, setModelsReady] = useState(false);
+  const [modelsError, setModelsError] = useState<string | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [isRecognizing, setIsRecognizing] = useState(false);
+  const [recognizedPerson, setRecognizedPerson] = useState<KnownPerson | null>(null);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+
+  const progressInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const uploadedImgRef = useRef<HTMLImageElement>(null);
 
   useEffect(() => {
     const t = setInterval(() => setCurrentTime(formatTime()), 1000);
     return () => clearInterval(t);
   }, []);
 
+  // Carrega os modelos de reconhecimento facial e as fotos pré-cadastradas uma única vez
   useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        await loadFaceModels();
+        await initKnownFaces(KNOWN_PEOPLE);
+        if (!cancelled) setModelsReady(true);
+      } catch (err) {
+        console.error(err);
+        if (!cancelled) setModelsError("Não foi possível carregar o reconhecimento facial.");
+      }
+    })();
     return () => {
-      if (scanInterval.current) clearInterval(scanInterval.current);
+      cancelled = true;
     };
   }, []);
 
-  const startRecognition = () => {
-    if (scanInterval.current) return;
+  const stopCamera = useCallback(() => {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+    setCameraReady(false);
+  }, []);
+
+  // Liga/desliga a webcam conforme o modo escolhido e a etapa atual
+  useEffect(() => {
+    let cancelled = false;
+
+    if (mode !== "camera" || (step !== "camera" && step !== "recognizing")) {
+      stopCamera();
+      return;
+    }
+
+    if (!streamRef.current) {
+      setCameraError(null);
+      navigator.mediaDevices
+        ?.getUserMedia({ video: { facingMode: "user" } })
+        .then((stream) => {
+          if (cancelled) {
+            stream.getTracks().forEach((t) => t.stop());
+            return;
+          }
+          streamRef.current = stream;
+          if (videoRef.current) videoRef.current.srcObject = stream;
+          setCameraReady(true);
+        })
+        .catch(() => {
+          if (!cancelled) setCameraError("Não foi possível acessar a câmera. Verifique as permissões do navegador.");
+        });
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, step, stopCamera]);
+
+  // Garante que a câmera é desligada ao desmontar o componente
+  useEffect(() => stopCamera, [stopCamera]);
+
+  useEffect(() => {
+    return () => {
+      if (progressInterval.current) clearInterval(progressInterval.current);
+    };
+  }, []);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (uploadedImageUrl) URL.revokeObjectURL(uploadedImageUrl);
+    setUploadedImageUrl(URL.createObjectURL(file));
+  };
+
+  const startRecognition = async () => {
+    if (isRecognizing || !modelsReady) return;
+
+    if (mode === "camera" && !cameraReady) {
+      toast.error("Câmera indisponível.");
+      return;
+    }
+
+    const inputEl = mode === "camera" ? videoRef.current : uploadedImgRef.current;
+    if (!inputEl) {
+      toast.error(mode === "camera" ? "Câmera indisponível." : "Selecione uma imagem de teste primeiro.");
+      return;
+    }
+
+    setIsRecognizing(true);
     setStep("recognizing");
     setScanProgress(0);
-    let progress = 0;
-    scanInterval.current = setInterval(() => {
-      progress += 2;
-      setScanProgress(progress);
-      if (progress >= 100) {
-        clearInterval(scanInterval.current!);
-        scanInterval.current = null;
-        setStep("confirmed");
-      }
+
+    progressInterval.current = setInterval(() => {
+      setScanProgress((p) => Math.min(p + 2, 90));
     }, 40);
+
+    try {
+      const result = await recognizeFace(inputEl);
+      if (progressInterval.current) {
+        clearInterval(progressInterval.current);
+        progressInterval.current = null;
+      }
+      setScanProgress(100);
+
+      if (result.person) {
+        setRecognizedPerson(result.person);
+        setTimeout(() => setStep("confirmed"), 300);
+      } else {
+        toast.error("Rosto não reconhecido. Tente novamente.");
+        setStep("camera");
+      }
+    } catch (err) {
+      console.error(err);
+      if (progressInterval.current) {
+        clearInterval(progressInterval.current);
+        progressInterval.current = null;
+      }
+      toast.error("Erro ao processar o reconhecimento facial.");
+      setStep("camera");
+    } finally {
+      setIsRecognizing(false);
+    }
   };
 
   const handlePunchSelect = (punch: PunchType) => {
@@ -208,10 +320,13 @@ export default function App() {
   };
 
   const handleReset = () => {
-    if (scanInterval.current) {
-      clearInterval(scanInterval.current);
-      scanInterval.current = null;
+    if (progressInterval.current) {
+      clearInterval(progressInterval.current);
+      progressInterval.current = null;
     }
+    if (uploadedImageUrl) URL.revokeObjectURL(uploadedImageUrl);
+    setUploadedImageUrl(null);
+    setRecognizedPerson(null);
     setStep("camera");
     setSelectedPunch(null);
     setSelectedMood(null);
@@ -224,6 +339,46 @@ export default function App() {
     center: { opacity: 1, x: 0 },
     exit: { opacity: 0, x: -40 },
   };
+
+  const renderScanArea = (scanning: boolean) => (
+    <div className="relative w-72 h-72 bg-gradient-to-br from-primary/5 to-primary/10 rounded-3xl overflow-hidden flex items-center justify-center border-2 border-dashed border-primary/20">
+      {mode === "camera" ? (
+        <>
+          <video ref={videoRef} autoPlay muted playsInline className="absolute inset-0 w-full h-full object-cover" />
+          {!cameraReady && !cameraError && (
+            <div className="absolute inset-0 flex items-center justify-center bg-primary/5">
+              <Loader2 size={28} className="animate-spin text-primary/50" />
+            </div>
+          )}
+          {cameraError && (
+            <div className="absolute inset-0 flex items-center justify-center bg-card/95 text-center px-6">
+              <p className="text-sm text-destructive font-medium">{cameraError}</p>
+            </div>
+          )}
+        </>
+      ) : uploadedImageUrl ? (
+        <img
+          ref={uploadedImgRef}
+          src={uploadedImageUrl}
+          alt="Imagem de teste selecionada"
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+      ) : (
+        <label className="flex flex-col items-center gap-3 text-muted-foreground cursor-pointer px-6 text-center">
+          <ImageUp size={36} />
+          <span className="text-sm font-medium">Toque para selecionar uma imagem de teste</span>
+          <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+        </label>
+      )}
+      <ScanOverlay scanning={scanning} />
+      <div className="absolute top-3 right-3 w-7 h-7 bg-accent rounded-full flex items-center justify-center">
+        <div className="w-2.5 h-2.5 bg-white rounded-full" />
+      </div>
+    </div>
+  );
+
+  const canStartRecognition =
+    modelsReady && !isRecognizing && (mode === "camera" ? cameraReady : Boolean(uploadedImageUrl));
 
   return (
     <div
@@ -295,7 +450,7 @@ export default function App() {
                 <div className="bg-secondary rounded-2xl px-8 py-4 w-full text-sm text-left space-y-2">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Colaborador</span>
-                    <span className="font-semibold text-foreground">Ana Beatriz Costa</span>
+                    <span className="font-semibold text-foreground">{recognizedPerson?.name}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Tipo</span>
@@ -332,31 +487,65 @@ export default function App() {
                     Reconhecimento Facial
                   </h2>
                   <p className="text-muted-foreground text-sm leading-relaxed max-w-xs mx-auto">
-                    Posicione seu rosto dentro da área indicada para realizar o reconhecimento facial.
+                    {mode === "camera"
+                      ? "Posicione seu rosto dentro da área indicada para realizar o reconhecimento facial."
+                      : "Selecione uma foto de teste para simular o reconhecimento facial."}
                   </p>
                 </div>
 
-                {/* Camera frame */}
-                <div className="relative w-72 h-72 bg-gradient-to-br from-primary/5 to-primary/10 rounded-3xl flex items-center justify-center border-2 border-dashed border-primary/20">
-                  <FaceFrame scanning={false} />
-                  {/* Camera icon indicator */}
-                  <div className="absolute top-3 right-3 w-7 h-7 bg-accent rounded-full flex items-center justify-center">
-                    <div className="w-2.5 h-2.5 bg-white rounded-full" />
-                  </div>
+                {/* Alternância entre câmera real e imagem de teste */}
+                <div className="flex bg-secondary rounded-xl p-1 gap-1">
+                  <button
+                    onClick={() => setMode("camera")}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 ${
+                      mode === "camera" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"
+                    }`}
+                  >
+                    <Camera size={16} />
+                    Câmera
+                  </button>
+                  <button
+                    onClick={() => setMode("upload")}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 ${
+                      mode === "upload" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"
+                    }`}
+                  >
+                    <ImageUp size={16} />
+                    Imagem de teste
+                  </button>
                 </div>
 
-                <div className="flex items-center gap-2 text-muted-foreground text-xs bg-secondary px-4 py-2 rounded-xl">
-                  <Shield size={14} className="text-primary" />
-                  <span>Dados protegidos por criptografia</span>
-                </div>
+                {renderScanArea(false)}
+
+                {modelsError ? (
+                  <div className="flex items-center gap-2 text-destructive text-xs bg-destructive/10 px-4 py-2 rounded-xl">
+                    <AlertCircle size={14} />
+                    <span>{modelsError}</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-muted-foreground text-xs bg-secondary px-4 py-2 rounded-xl">
+                    <Shield size={14} className="text-primary" />
+                    <span>Dados protegidos por criptografia</span>
+                  </div>
+                )}
 
                 <button
                   onClick={startRecognition}
-                  className="w-full py-5 bg-accent text-white font-bold rounded-2xl text-lg flex items-center justify-center gap-3 hover:bg-accent/90 active:scale-95 transition-all duration-150 shadow-md"
+                  disabled={!canStartRecognition}
+                  className="w-full py-5 bg-accent text-white font-bold rounded-2xl text-lg flex items-center justify-center gap-3 hover:bg-accent/90 active:scale-95 transition-all duration-150 shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
                   style={{ fontFamily: "'Poppins', sans-serif" }}
                 >
-                  <Fingerprint size={24} />
-                  Iniciar Reconhecimento
+                  {!modelsReady ? (
+                    <>
+                      <Loader2 size={24} className="animate-spin" />
+                      Carregando reconhecimento...
+                    </>
+                  ) : (
+                    <>
+                      <Fingerprint size={24} />
+                      Iniciar Reconhecimento
+                    </>
+                  )}
                 </button>
               </motion.div>
             ) : step === "recognizing" ? (
@@ -376,9 +565,7 @@ export default function App() {
                   <p className="text-muted-foreground text-sm">Mantenha o rosto na posição indicada</p>
                 </div>
 
-                <div className="relative w-72 h-72 bg-gradient-to-br from-primary/5 to-primary/10 rounded-3xl flex items-center justify-center border-2 border-primary/20">
-                  <FaceFrame scanning={true} />
-                </div>
+                {renderScanArea(true)}
 
                 {/* Progress bar */}
                 <div className="w-full space-y-2">
@@ -453,8 +640,10 @@ export default function App() {
                     👤
                   </div>
                   <div>
-                    <p className="font-bold text-foreground text-lg leading-tight">Ana Beatriz Costa</p>
-                    <p className="text-muted-foreground text-sm">Analista de RH • Matrícula #1042</p>
+                    <p className="font-bold text-foreground text-lg leading-tight">{recognizedPerson?.name}</p>
+                    <p className="text-muted-foreground text-sm">
+                      {recognizedPerson?.role} • Matrícula {recognizedPerson?.matricula}
+                    </p>
                     <div className="flex items-center gap-1 mt-0.5">
                       <div className="w-2 h-2 bg-green-500 rounded-full" />
                       <span className="text-xs text-green-600 font-medium">Ativo</span>
@@ -581,7 +770,7 @@ export default function App() {
 
                 <div className="bg-secondary rounded-2xl overflow-hidden divide-y divide-border">
                   {[
-                    { label: "Colaborador", value: "Ana Beatriz Costa" },
+                    { label: "Colaborador", value: recognizedPerson?.name ?? "" },
                     { label: "Data", value: formatDate() },
                     { label: "Horário", value: registrationTime, mono: true },
                     { label: "Tipo de Registro", value: selectedPunch ? PUNCH_LABELS[selectedPunch] : "" },
@@ -625,6 +814,8 @@ export default function App() {
           <span className="text-primary font-medium">Seguro & Certificado</span>
         </p>
       </footer>
+
+      <Toaster position="top-center" richColors />
     </div>
   );
 }
