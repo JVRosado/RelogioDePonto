@@ -14,8 +14,44 @@ export const KNOWN_PEOPLE: KnownPerson[] = [
   {
     id: "joao-vitor",
     name: "João Vitor",
-    role: "Estagiário de TI",
-    matricula: "#1043",
+    role: "Analista de processos e dados",
+    matricula: "#0001",
     image: `${KNOWN_FACES_URL}/joao-vitor.jpeg`,
   },
+  {
+    id: "joao-miguel",
+    name: "João miguel",
+    role: "Jovem Aprendzi",
+    matricula: "#0002",
+    image: `${KNOWN_FACES_URL}/joao-miguel.jpeg`,
+  },
+  {
+    id: "Alvaro",
+    name: "Alvaro Gabriel",
+    role: "Jovem Aprendzi",
+    matricula: "#0003",
+    image: `${KNOWN_FACES_URL}/Alvaro.jpeg`,
+  },
+  {
+    id: "Isabella",
+    name: "Isabella",
+    role: "Jovem Aprendzi",
+    matricula: "#0004",
+    image: `${KNOWN_FACES_URL}/Isabela.jpeg`,
+  },
+  {
+    id: "Pamela",
+    name: "Pamela",
+    role: "Jovem Aprendzi",
+    matricula: "#0005",
+    image: `${KNOWN_FACES_URL}/Pamela.jpeg`,
+  },
+  {
+    id: "Milena",
+    name: "Milena Nunes",
+    role: "Jovem Aprendzi",
+    matricula: "#0006",
+    image: `${KNOWN_FACES_URL}/Milena.jpeg`,
+  },
 ];
+
