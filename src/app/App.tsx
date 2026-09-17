@@ -177,7 +177,7 @@ export default function App() {
 
   const [showHistory, setShowHistory] = useState(false);
   const [historyQuery, setHistoryQuery] = useState("");
-  const [historyResults, setHistoryResults] = useState<PunchRecord[] | null>(null);
+  const [historyResults, setHistoryResults] = useState<PunchRecord[]>([]);
 
   const progressInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -338,13 +338,13 @@ export default function App() {
 
   const openHistory = () => {
     setHistoryQuery("");
-    setHistoryResults(null);
+    setHistoryResults(getRecordsByName(""));
     setShowHistory(true);
   };
 
-  const handleHistorySearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    setHistoryResults(getRecordsByName(historyQuery));
+  const handleHistoryQueryChange = (value: string) => {
+    setHistoryQuery(value);
+    setHistoryResults(getRecordsByName(value));
   };
 
   const handleReset = () => {
@@ -894,30 +894,25 @@ export default function App() {
               </div>
 
               <div className="p-6 flex flex-col gap-4 overflow-y-auto">
-                <form onSubmit={handleHistorySearch} className="flex gap-2">
-                  <input
-                    type="text"
-                    value={historyQuery}
-                    onChange={(e) => setHistoryQuery(e.target.value)}
-                    placeholder="Digite o nome do colaborador"
-                    autoFocus
-                    className="flex-1 px-4 py-3 rounded-xl border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-accent"
-                  />
-                  <button
-                    type="submit"
-                    className="px-4 rounded-xl bg-accent text-white font-semibold flex items-center justify-center hover:bg-accent/90 active:scale-95 transition-all duration-150"
-                  >
-                    <Search size={18} />
-                  </button>
-                </form>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      type="text"
+                      value={historyQuery}
+                      onChange={(e) => handleHistoryQueryChange(e.target.value)}
+                      placeholder="Filtrar por nome (opcional)"
+                      autoFocus
+                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+                    />
+                  </div>
+                </div>
 
-                {historyResults === null ? (
+                {historyResults.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-8">
-                    Digite um nome e busque para ver os registros salvos neste navegador.
-                  </p>
-                ) : historyResults.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-8">
-                    Nenhum registro encontrado para "{historyQuery}".
+                    {historyQuery.trim()
+                      ? `Nenhum registro encontrado para "${historyQuery}".`
+                      : "Nenhum registro salvo neste navegador ainda."}
                   </p>
                 ) : (
                   <div className="flex flex-col gap-3">

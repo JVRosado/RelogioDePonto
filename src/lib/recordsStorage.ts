@@ -39,10 +39,15 @@ export function saveRecord(record: Omit<PunchRecord, "id" | "timestamp">): void 
   }
 }
 
+/** Todos os registros salvos, mais recentes primeiro. */
+export function getAllRecords(): PunchRecord[] {
+  return readAll().sort((a, b) => b.timestamp - a.timestamp);
+}
+
 /** Busca registros cujo nome contém o texto informado (sem diferenciar maiúsculas/minúsculas), mais recentes primeiro. */
 export function getRecordsByName(query: string): PunchRecord[] {
   const normalized = query.trim().toLowerCase();
-  if (!normalized) return [];
+  if (!normalized) return getAllRecords();
   return readAll()
     .filter((r) => r.personName.toLowerCase().includes(normalized))
     .sort((a, b) => b.timestamp - a.timestamp);
