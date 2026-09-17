@@ -1,0 +1,237 @@
+================================================================
+ REGISTRO DE PONTO FACIAL (MoodPoint) - DOCUMENTACAO DO PROJETO
+================================================================
+Atualizado em: 16/09/2026
+Repositorio: https://github.com/JVRosado/RelogioDePonto
+Site publicado (GitHub Pages): https://jvrosado.github.io/RelogioDePonto/
+
+
+----------------------------------------------------------------
+1. O QUE E O PROJETO
+----------------------------------------------------------------
+Prototipo de um sistema de registro de ponto por reconhecimento
+facial. O fluxo simula uma catraca/totem de empresa:
+
+  1. Camera / Imagem de teste  -> tela inicial de reconhecimento
+  2. Analisando...             -> roda a deteccao facial de verdade
+  3. Identidade Confirmada     -> mostra nome/cargo da pessoa reconhecida
+  4. Tipo de Registro          -> Entrada / Inicio intervalo / Fim intervalo / Saida
+  5. Humor                     -> registro de bem-estar (emoji)
+  6. Resumo / Confirmacao      -> revisao final antes de confirmar
+  7. Registro Realizado        -> tela de sucesso
+
+E um PROTOTIPO: nao tem cadastro de funcionarios pela interface,
+nem banco de dados. As pessoas "cadastradas" ficam direto no
+codigo-fonte (ver secao 4).
+
+
+----------------------------------------------------------------
+2. STACK / TECNOLOGIAS USADAS
+----------------------------------------------------------------
+- React 18 + TypeScript
+- Vite (build tool e dev server)
+- Tailwind CSS (estilizacao)
+- Framer Motion / "motion" (animacoes e transicoes de tela)
+- lucide-react (icones)
+- sonner (notificacoes toast, ex: "Rosto nao reconhecido")
+
+Reconhecimento facial:
+- Biblioteca: @vladmandic/face-api
+  (fork mantido do face-api.js, roda sobre TensorFlow.js dentro
+  do proprio navegador - nao usa nenhum servidor/API externa,
+  tudo processado localmente no dispositivo do usuario)
+- Modelos usados (arquivos .bin com os pesos da rede neural,
+  ficam em public/models/):
+    - tiny_face_detector       -> localiza o rosto na imagem
+    - face_landmark_68         -> mapeia 68 pontos do rosto (olhos,
+                                   nariz, boca etc.) para alinhar
+    - face_recognition_model   -> gera um "descritor" facial: um
+                                   vetor de 128 numeros que representa
+                                   aquele rosto de forma unica
+
+Como funciona o reconhecimento (resumo tecnico):
+  1. Ao abrir o app, os 3 modelos acima sao carregados e, para cada
+     pessoa cadastrada (arquivo em knownPeople.ts), a foto de
+     referencia e processada e vira um "descritor" (vetor de 128
+     numeros), guardado em memoria.
+  2. Quando o usuario clica em "Iniciar Reconhecimento", a mesma
+     coisa e feita com a imagem capturada (da camera ou do upload).
+  3. Os dois descritores sao comparados por distancia euclidiana.
+     Se a distancia for menor que 0.5 (limiar configurado), e
+     considerado a mesma pessoa. Caso contrario, "rosto nao
+     reconhecido".
+
+Publicacao / hospedagem:
+- GitHub Pages (hospedagem estatica gratuita do GitHub)
+- GitHub Actions (workflow que builda e publica o site
+  automaticamente a cada push na branch main)
+
+
+----------------------------------------------------------------
+3. ESTRUTURA DE ARQUIVOS RELEVANTES
+----------------------------------------------------------------
+src/app/App.tsx
+    Componente principal. Toda a logica de telas/fluxo, controle
+    da camera (getUserMedia), upload de imagem de teste, chamada
+    do reconhecimento e as transicoes animadas entre telas.
+
+src/lib/faceRecognition.ts
+    Toda a integracao com @vladmandic/face-api:
+    - loadFaceModels()   -> carrega os 3 modelos
+    - initKnownFaces()   -> calcula os descritores das pessoas
+                             cadastradas
+    - recognizeFace()    -> compara uma imagem/frame com as
+                             pessoas cadastradas e retorna quem
+                             foi reconhecido (ou null)
+
+src/data/knownPeople.ts
+    Lista das pessoas "cadastradas" no prototipo, direto no
+    codigo (sem tela de cadastro). Cada entrada tem:
+    id, name, role, matricula, image (caminho da foto).
+
+public/known-faces/
+    Fotos de referencia das pessoas cadastradas. Precisam bater
+    exatamente com o nome de arquivo usado em knownPeople.ts
+    (incluindo a extensao: .jpg e .jpeg NAO sao a mesma coisa).
+
+public/models/
+    Arquivos dos modelos de IA (pesos da rede neural), copiados
+    do pacote @vladmandic/face-api. Nao precisam ser mexidos.
+
+vite.config.ts
+    Configuracao do Vite. Tem o "base: '/RelogioDePonto/'", que
+    e necessario porque o GitHub Pages publica o site dentro de
+    uma subpasta (nao na raiz do dominio).
+
+.github/workflows/deploy.yml
+    Define o processo automatico de build + publicacao no GitHub
+    Pages sempre que ha um push na branch main.
+
+
+----------------------------------------------------------------
+4. COMO ADICIONAR UMA NOVA PESSOA
+----------------------------------------------------------------
+1. Salve uma foto do rosto (de frente, bem iluminada) em:
+     public/known-faces/nome-do-arquivo.jpg
+
+2. Abra src/data/knownPeople.ts e acrescente um novo objeto no
+   array KNOWN_PEOPLE:
+
+     {
+       id: "identificador-unico",
+       name: "Nome Completo",
+       role: "Cargo",
+       matricula: "#0000",
+       image: `${KNOWN_FACES_URL}/nome-do-arquivo.jpg`,
+     },
+
+3. Commit e push (git add, git commit, git push). O GitHub
+   Actions builda e publica sozinho em 1-2 minutos.
+
+CUIDADOS:
+  - A extensao do arquivo em "image" precisa ser IDENTICA ao
+    arquivo salvo em public/known-faces/ (maiusculas/minusculas
+    e .jpg vs .jpeg importam).
+  - A foto fica PUBLICA no repositorio GitHub e no site publicado
+    (decisao tomada conscientemente neste projeto - nao ha tela
+    de cadastro nem controle de acesso as fotos).
+  - Fotos de rosto muito de perto, com angulo estranho ou pouca
+    luz podem nao ser detectadas. Prefira fotos nitidas, de frente.
+
+
+----------------------------------------------------------------
+5. HISTORICO DO QUE FOI FEITO NESTA SESSAO
+----------------------------------------------------------------
+
+a) Correcoes de bugs na tela original (antes do reconhecimento)
+   - Corrigido um "vazamento" de intervalo (setInterval) na
+     simulacao de reconhecimento: cliques duplos no botao
+     "Iniciar Reconhecimento" podiam deixar um timer rodando
+     escondido, fazendo a tela mudar sozinha depois.
+   - Adicionada limpeza (cleanup) desse timer ao desmontar o
+     componente e ao resetar o fluxo.
+   - Suavizada a transicao entre telas (o card agora anima a
+     mudanca de altura em vez de "pular" de tamanho).
+
+b) Configuracao do repositorio Git / GitHub
+   - Criado .gitignore (excluindo node_modules, dist, logs etc.)
+   - git init, primeiro commit e push para
+     https://github.com/JVRosado/RelogioDePonto
+
+c) Implementacao do reconhecimento facial de verdade
+   - Instalado @vladmandic/face-api e copiados os modelos
+     necessarios para public/models/.
+   - Criado src/lib/faceRecognition.ts (carregar modelos, gerar
+     descritores, comparar rostos).
+   - Criado src/data/knownPeople.ts (pessoas cadastradas direto
+     no codigo, sem tela de cadastro, conforme pedido).
+   - Adicionadas duas formas de "escanear": camera real
+     (getUserMedia) ou selecionar uma imagem de teste (upload).
+   - Troca da simulacao falsa de progresso pela deteccao real,
+     com toast de erro ("Rosto nao reconhecido") quando nao
+     encontra ninguem.
+   - Testado em navegador headless (Playwright) simulando camera
+     falsa e upload de imagem, sem erros.
+
+d) Bug encontrado e corrigido: reconhecimento nao funcionava
+   - Causa 1: extensao de arquivo errada no codigo (.jpg em vez
+     de .jpeg) fazia a foto de referencia dar 404 e nunca
+     carregar.
+   - Causa 2: o tamanho de deteccao configurado (inputSize: 320)
+     dava uma pontuacao de confianca baixa demais (0.22) para
+     aquela foto especifica, abaixo do limiar aceito (0.5). Como
+     o modelo TinyFaceDetector nao e "linear" (nem sempre um
+     tamanho maior da resultado melhor), o tamanho 320 caiu numa
+     "zona ruim" para aquela foto. Corrigido para inputSize: 416
+     (que e inclusive o padrao recomendado pela propria
+     biblioteca), passando a pontuacao para 0.98+.
+
+e) Publicacao no GitHub Pages
+   - Ajustado vite.config.ts com o "base" correto para funcionar
+     em subpasta.
+   - Corrigidos os caminhos de modelos e fotos para usar
+     import.meta.env.BASE_URL (senao dava 404 quando publicado,
+     mesmo funcionando local).
+   - Criado o workflow do GitHub Actions
+     (.github/workflows/deploy.yml) para build + deploy
+     automatico a cada push.
+   - Decisao de privacidade: inicialmente as fotos de referencia
+     foram excluidas do repositorio (.gitignore) para nao expor
+     dados pessoais publicamente.
+   - O usuario percebeu que, sem nenhuma foto publicada, o site
+     no ar nunca reconhecia ninguem (comportamento esperado). Foi
+     decidido entao publicar a foto de referencia mesmo assim,
+     revertendo a exclusao no .gitignore.
+   - Confirmado via GitHub Actions API e testes diretos (curl)
+     que o site, a foto e os modelos estao todos no ar e
+     respondendo corretamente.
+
+
+----------------------------------------------------------------
+6. LIMITACOES CONHECIDAS (por ser prototipo)
+----------------------------------------------------------------
+- Sem cadastro pela interface: adicionar/remover pessoa exige
+  mexer no codigo e fazer um novo commit.
+- Sem banco de dados: nenhum registro de ponto e realmente salvo
+  em lugar nenhum (e so uma simulacao visual do fluxo).
+- Fotos de referencia ficam publicas no repositorio/site (sem
+  controle de acesso).
+- Todo o processamento de reconhecimento roda no navegador do
+  usuario (client-side) - nao ha nenhum backend/servidor.
+- O pacote de modelos de IA deixa o site relativamente pesado
+  (~7 MB de modelos + biblioteca de IA), o que e normal para
+  reconhecimento facial rodando 100% no navegador.
+
+
+----------------------------------------------------------------
+7. COMANDOS UTEIS
+----------------------------------------------------------------
+npm install        -> instala as dependencias
+npm run dev         -> roda o site localmente em modo desenvolvimento
+npm run build       -> gera a versao de producao (pasta dist/)
+npm run preview     -> serve a versao de producao localmente
+
+git add .
+git commit -m "mensagem"
+git push             -> publica as mudancas (dispara o deploy automatico)
+================================================================

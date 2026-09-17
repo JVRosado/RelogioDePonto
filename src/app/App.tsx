@@ -662,6 +662,16 @@ export default function App() {
                   Continuar
                   <ChevronRight size={22} />
                 </motion.button>
+
+                <motion.button
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.5 }}
+                  onClick={handleReset}
+                  className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors duration-150"
+                >
+                  Não é você? Escanear novamente
+                </motion.button>
               </motion.div>
             ) : step === "punchType" ? (
               <motion.div
@@ -810,7 +820,7 @@ export default function App() {
       {/* Footer */}
       <footer className="py-4 text-center">
         <p className="text-xs text-muted-foreground">
-          MoodPoint v2.1.0 &nbsp;·&nbsp; © 2025 Todos os direitos reservados &nbsp;·&nbsp;
+          MoodPoint v2.1.0 &nbsp;·&nbsp; © 2026 Todos os direitos reservados &nbsp;·&nbsp;
           <span className="text-primary font-medium">Seguro & Certificado</span>
         </p>
       </footer>
