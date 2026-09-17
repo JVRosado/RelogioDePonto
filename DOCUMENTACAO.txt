@@ -1,237 +1,481 @@
 ================================================================
  REGISTRO DE PONTO FACIAL (MoodPoint) - DOCUMENTACAO DO PROJETO
 ================================================================
-Atualizado em: 16/09/2026
+Atualizado em: 17/09/2026
 Repositorio: https://github.com/JVRosado/RelogioDePonto
 Site publicado (GitHub Pages): https://jvrosado.github.io/RelogioDePonto/
 
+Este documento tem duas partes:
+  PARTE 1 - visao geral, fluxo de telas e como as coisas funcionam
+  PARTE 2 - guia arquivo por arquivo de TUDO que existe no projeto
+  PARTE 3 - historico de tudo que foi feito, limitacoes e comandos uteis
+
+Toda referencia a arquivo vem no formato:
+  Arquivo: caminho/do/arquivo.ts (linha X) ou (linhas X-Y)
+para voce conseguir abrir e ir direto no trecho falado.
+
+
+================================================================
+ PARTE 1 - VISAO GERAL
+================================================================
 
 ----------------------------------------------------------------
-1. O QUE E O PROJETO
+1.1 O QUE E O PROJETO
 ----------------------------------------------------------------
 Prototipo de um sistema de registro de ponto por reconhecimento
-facial. O fluxo simula uma catraca/totem de empresa:
-
-  1. Camera / Imagem de teste  -> tela inicial de reconhecimento
-  2. Analisando...             -> roda a deteccao facial de verdade
-  3. Identidade Confirmada     -> mostra nome/cargo da pessoa reconhecida
-  4. Tipo de Registro          -> Entrada / Inicio intervalo / Fim intervalo / Saida
-  5. Humor                     -> registro de bem-estar (emoji)
-  6. Resumo / Confirmacao      -> revisao final antes de confirmar
-  7. Registro Realizado        -> tela de sucesso
-
-E um PROTOTIPO: nao tem cadastro de funcionarios pela interface,
-nem banco de dados. As pessoas "cadastradas" ficam direto no
-codigo-fonte (ver secao 4).
+facial, todo client-side (sem backend/servidor/banco de dados
+proprio - tudo roda no navegador do usuario). Simula uma
+catraca/totem de empresa: reconhece o rosto da pessoa, pergunta
+o tipo de registro e o humor, e salva isso no historico local do
+navegador.
 
 
 ----------------------------------------------------------------
-2. STACK / TECNOLOGIAS USADAS
+1.2 STACK / TECNOLOGIAS USADAS
 ----------------------------------------------------------------
 - React 18 + TypeScript
-- Vite (build tool e dev server)
-- Tailwind CSS (estilizacao)
-- Framer Motion / "motion" (animacoes e transicoes de tela)
+- Vite 6 (build tool e dev server)
+- Tailwind CSS v4 (estilizacao via classes utilitarias)
+- Framer Motion / pacote "motion" (animacoes e transicoes)
 - lucide-react (icones)
 - sonner (notificacoes toast, ex: "Rosto nao reconhecido")
-
-Reconhecimento facial:
-- Biblioteca: @vladmandic/face-api
-  (fork mantido do face-api.js, roda sobre TensorFlow.js dentro
-  do proprio navegador - nao usa nenhum servidor/API externa,
-  tudo processado localmente no dispositivo do usuario)
-- Modelos usados (arquivos .bin com os pesos da rede neural,
-  ficam em public/models/):
-    - tiny_face_detector       -> localiza o rosto na imagem
-    - face_landmark_68         -> mapeia 68 pontos do rosto (olhos,
-                                   nariz, boca etc.) para alinhar
-    - face_recognition_model   -> gera um "descritor" facial: um
-                                   vetor de 128 numeros que representa
-                                   aquele rosto de forma unica
-
-Como funciona o reconhecimento (resumo tecnico):
-  1. Ao abrir o app, os 3 modelos acima sao carregados e, para cada
-     pessoa cadastrada (arquivo em knownPeople.ts), a foto de
-     referencia e processada e vira um "descritor" (vetor de 128
-     numeros), guardado em memoria.
-  2. Quando o usuario clica em "Iniciar Reconhecimento", a mesma
-     coisa e feita com a imagem capturada (da camera ou do upload).
-  3. Os dois descritores sao comparados por distancia euclidiana.
-     Se a distancia for menor que 0.5 (limiar configurado), e
-     considerado a mesma pessoa. Caso contrario, "rosto nao
-     reconhecido".
-
-Publicacao / hospedagem:
-- GitHub Pages (hospedagem estatica gratuita do GitHub)
-- GitHub Actions (workflow que builda e publica o site
-  automaticamente a cada push na branch main)
+- @vladmandic/face-api (reconhecimento facial, roda sobre
+  TensorFlow.js dentro do proprio navegador)
+- GitHub Pages + GitHub Actions (hospedagem e deploy automatico)
 
 
 ----------------------------------------------------------------
-3. ESTRUTURA DE ARQUIVOS RELEVANTES
+1.3 FLUXO DE TELAS (passo a passo)
 ----------------------------------------------------------------
-src/app/App.tsx
-    Componente principal. Toda a logica de telas/fluxo, controle
-    da camera (getUserMedia), upload de imagem de teste, chamada
-    do reconhecimento e as transicoes animadas entre telas.
+Todo o fluxo mora dentro de um unico componente:
+  Arquivo: src/app/App.tsx (linhas 202-1106, funcao App)
 
-src/lib/faceRecognition.ts
-    Toda a integracao com @vladmandic/face-api:
-    - loadFaceModels()   -> carrega os 3 modelos
-    - initKnownFaces()   -> calcula os descritores das pessoas
-                             cadastradas
-    - recognizeFace()    -> compara uma imagem/frame com as
-                             pessoas cadastradas e retorna quem
-                             foi reconhecido (ou null)
+A tela atual fica guardada numa variavel de estado chamada `step`
+(tipo "Step"), e o JSX decide o que mostrar com uma cadeia de
+if/else (ternarios) dentro de um <AnimatePresence> - so uma tela
+fica visivel por vez, com uma animacao de deslizar entre elas.
+  Arquivo: src/app/App.tsx (linha 40) - definicao do tipo Step
 
-src/data/knownPeople.ts
-    Lista das pessoas "cadastradas" no prototipo, direto no
-    codigo (sem tela de cadastro). Cada entrada tem:
-    id, name, role, matricula, image (caminho da foto).
+Ordem do fluxo:
 
-public/known-faces/
-    Fotos de referencia das pessoas cadastradas. Precisam bater
-    exatamente com o nome de arquivo usado em knownPeople.ts
-    (incluindo a extensao: .jpg e .jpeg NAO sao a mesma coisa).
+  [1] Camera
+      Arquivo: src/app/App.tsx (linhas 620-709)
+      Tela inicial. Duas opcoes de fonte de imagem: "Camera" (usa
+      a webcam de verdade via getUserMedia) ou "Imagem de teste"
+      (escolhe um arquivo de imagem do computador/celular). Tem
+      o botao "Iniciar Reconhecimento" (so habilita quando os
+      modelos de IA ja carregaram e ha uma imagem disponivel) e
+      o botao "Ver Registros" (abre o historico, ver secao 1.5).
 
-public/models/
-    Arquivos dos modelos de IA (pesos da rede neural), copiados
-    do pacote @vladmandic/face-api. Nao precisam ser mexidos.
+  [2] Analisando... (recognizing)
+      Arquivo: src/app/App.tsx (linhas 710-759)
+      Etapa automatica (sem interacao do usuario): mostra uma
+      barra de progresso enquanto startRecognition() roda a
+      deteccao facial de verdade em segundo plano.
+      Logica: Arquivo: src/app/App.tsx (linha 342, funcao
+      startRecognition)
 
-vite.config.ts
-    Configuracao do Vite. Tem o "base: '/RelogioDePonto/'", que
-    e necessario porque o GitHub Pages publica o site dentro de
-    uma subpasta (nao na raiz do dominio).
+  [3] Identidade Confirmada (confirmed)
+      Arquivo: src/app/App.tsx (linhas 760-849)
+      Mostra nome/cargo/matricula da pessoa reconhecida. Botao
+      "Continuar" segue o fluxo; botao "Nao e voce? Escanear
+      novamente" cancela e volta pra tela de camera (usado quando
+      o sistema reconheceu a pessoa errada).
 
-.github/workflows/deploy.yml
-    Define o processo automatico de build + publicacao no GitHub
-    Pages sempre que ha um push na branch main.
+  [4] Qual registro deseja realizar? (punchType)
+      Arquivo: src/app/App.tsx (linhas 850-896)
+      Grade com 4 opcoes: Entrada, Inicio do Intervalo, Fim do
+      Intervalo, Saida.
 
+  [5] Como esta o seu humor? (mood)
+      Arquivo: src/app/App.tsx (linhas 897-944)
+      5 opcoes de humor com emoji, so pra fins de bem-estar
+      corporativo (nao afeta o registro de ponto em si).
 
-----------------------------------------------------------------
-4. COMO ADICIONAR UMA NOVA PESSOA
-----------------------------------------------------------------
-1. Salve uma foto do rosto (de frente, bem iluminada) em:
-     public/known-faces/nome-do-arquivo.jpg
+  [6] Confirmar Registro (summary)
+      Arquivo: src/app/App.tsx (linhas 945-999)
+      Resumo de tudo (pessoa, data, horario, tipo, humor) antes
+      de confirmar. Botao "Voltar" retorna pra escolha de tipo;
+      "Confirmar Registro" salva o registro (ver secao 1.5) e
+      mostra a tela final.
 
-2. Abra src/data/knownPeople.ts e acrescente um novo objeto no
-   array KNOWN_PEOPLE:
-
-     {
-       id: "identificador-unico",
-       name: "Nome Completo",
-       role: "Cargo",
-       matricula: "#0000",
-       image: `${KNOWN_FACES_URL}/nome-do-arquivo.jpg`,
-     },
-
-3. Commit e push (git add, git commit, git push). O GitHub
-   Actions builda e publica sozinho em 1-2 minutos.
-
-CUIDADOS:
-  - A extensao do arquivo em "image" precisa ser IDENTICA ao
-    arquivo salvo em public/known-faces/ (maiusculas/minusculas
-    e .jpg vs .jpeg importam).
-  - A foto fica PUBLICA no repositorio GitHub e no site publicado
-    (decisao tomada conscientemente neste projeto - nao ha tela
-    de cadastro nem controle de acesso as fotos).
-  - Fotos de rosto muito de perto, com angulo estranho ou pouca
-    luz podem nao ser detectadas. Prefira fotos nitidas, de frente.
+  [7] Registro Realizado! (tela "done")
+      Arquivo: src/app/App.tsx (linhas 570-619)
+      Tela de sucesso. Botao "Novo Registro" reseta tudo e volta
+      pro passo [1].
 
 
 ----------------------------------------------------------------
-5. HISTORICO DO QUE FOI FEITO NESTA SESSAO
+1.4 COMO FUNCIONA O RECONHECIMENTO FACIAL
+----------------------------------------------------------------
+Toda a logica de IA fica isolada em:
+  Arquivo: src/lib/faceRecognition.ts (156 linhas)
+
+Resumo tecnico:
+  1. loadFaceModels() baixa 3 modelos de rede neural (arquivos
+     .bin em public/models/) na primeira vez que o app abre:
+       - tiny_face_detector: acha ONDE esta o rosto na imagem
+       - face_landmark_68: mapeia 68 pontos do rosto (olhos,
+         nariz, boca) pra alinhar
+       - face_recognition_model: gera o "descritor" (vetor de
+         128 numeros que representa aquele rosto)
+  2. initKnownFaces() processa a foto de cada pessoa cadastrada
+     (src/data/knownPeople.ts) e guarda o descritor de cada uma
+     em memoria.
+  3. Quando o usuario clica "Iniciar Reconhecimento",
+     recognizeFace() roda os mesmos 3 modelos sobre a imagem
+     capturada (frame da camera ou imagem de teste) e compara o
+     descritor resultante com os descritores conhecidos, por
+     distancia euclidiana. Se a distancia for menor que 0.5
+     (MATCH_THRESHOLD), considera a mesma pessoa.
+  Arquivo: src/lib/faceRecognition.ts (linha 32) loadFaceModels
+  Arquivo: src/lib/faceRecognition.ts (linha 90) initKnownFaces
+  Arquivo: src/lib/faceRecognition.ts (linha 130) recognizeFace
+
+Pessoas cadastradas (sem tela de cadastro, direto no codigo):
+  Arquivo: src/data/knownPeople.ts (75 linhas)
+Fotos de referencia dessas pessoas:
+  Pasta: public/known-faces/
+Modelos de IA (nao precisam ser mexidos manualmente):
+  Pasta: public/models/
+
+
+----------------------------------------------------------------
+1.5 COMO FUNCIONA O HISTORICO DE REGISTROS (localStorage)
+----------------------------------------------------------------
+Nao ha banco de dados - cada registro confirmado e salvo no
+localStorage do proprio navegador do usuario.
+  Arquivo: src/lib/recordsStorage.ts (88 linhas)
+
+- saveRecord() e chamado dentro de handleConfirm(), quando o
+  usuario clica "Confirmar Registro".
+  Arquivo: src/app/App.tsx (linha 415, funcao handleConfirm)
+- O botao "Ver Registros" (tela de camera) abre um modal que já
+  mostra TODOS os registros salvos, com um campo de filtro por
+  nome que busca em tempo real (a cada tecla digitada).
+  Arquivo: src/app/App.tsx (linhas 1016-1106, o modal)
+  Arquivo: src/app/App.tsx (linha 430, openHistory)
+  Arquivo: src/app/App.tsx (linha 438, handleHistoryQueryChange)
+
+IMPORTANTE: o localStorage e isolado por origem (dominio +
+porta). Isso significa:
+  - registros salvos em localhost (rodando local) NAO aparecem
+    no site publicado, e vice-versa;
+  - registros salvos no celular de uma pessoa NAO aparecem no
+    computador de outra pessoa - cada aparelho/navegador tem seu
+    proprio historico isolado.
+
+
+================================================================
+ PARTE 2 - GUIA ARQUIVO POR ARQUIVO
+================================================================
+A estrutura de pastas (ignorando node_modules, dist e .git):
+
+  index.html
+  vite.config.ts
+  tsconfig.json
+  package.json / package-lock.json
+  postcss.config.mjs
+  pnpm-workspace.yaml
+  .gitignore
+  .github/workflows/deploy.yml
+  README.md
+  ATTRIBUTIONS.md
+  guidelines/Guidelines.md
+  default_shadcn_theme.css
+  public/
+    models/          (arquivos do modelo de IA)
+    known-faces/      (fotos de referencia)
+  src/
+    main.tsx
+    vite-env.d.ts
+    app/
+      App.tsx
+      components/
+        ui/           (biblioteca shadcn/ui - NAO USADA)
+        figma/         (componente auxiliar - NAO USADO)
+    data/
+      knownPeople.ts
+    lib/
+      faceRecognition.ts
+      recordsStorage.ts
+    styles/
+      index.css / tailwind.css / theme.css / fonts.css / globals.css
+
+
+----------------------------------------------------------------
+2.1 ARQUIVOS DE CONFIGURACAO (raiz do projeto)
+----------------------------------------------------------------
+
+Arquivo: index.html
+  A pagina HTML "casca" que carrega o app. Contem a div#root onde
+  o React e montado, a tag <script type="module" src="/src/main.tsx">
+  que inicia tudo, e as meta tags de idioma/tradutor:
+  `<html lang="pt-BR" translate="no">` + `<meta name="google"
+  content="notranslate">` - impedem o Google Tradutor do Chrome
+  de mexer no DOM da pagina (isso já causou tela branca no
+  passado, por conflito entre o tradutor e o React).
+
+Arquivo: vite.config.ts
+  Configuracao do Vite (bundler/dev server). Pontos importantes:
+    - `base: '/RelogioDePonto/'` - necessario pro GitHub Pages,
+      que publica o site dentro de uma subpasta, nao na raiz do
+      dominio. Por isso o codigo usa import.meta.env.BASE_URL em
+      vez de caminhos fixos tipo "/models" (ver secao 1.4/1.5).
+    - alias `@` aponta pra pasta src/
+    - plugin figmaAssetResolver: heranca do scaffold original
+      (Figma Make), nao usado por nenhum arquivo atual.
+
+Arquivo: tsconfig.json
+  Configuracao do TypeScript (modo strict ligado, JSX do React,
+  resolucao de modulos "bundler" compativel com o Vite).
+
+Arquivo: package.json
+  Lista de dependencias e os scripts (ver secao 3.3 "Comandos
+  Uteis"). As dependencias relevantes pro reconhecimento facial e
+  UI ja estao listadas na secao 1.2.
+
+Arquivo: postcss.config.mjs
+  Vazio de proposito - o Tailwind v4 (via @tailwindcss/vite) ja
+  configura o PostCSS sozinho.
+
+Arquivo: pnpm-workspace.yaml
+  Configuracao minima de workspace do pnpm (so declara que o
+  pacote raiz "." faz parte do workspace). Nao afeta o
+  funcionamento do app.
+
+Arquivo: .gitignore
+  Define o que NAO vai pro Git: node_modules, dist (build),
+  arquivos .env, logs, configs de editor, etc.
+
+Arquivo: .github/workflows/deploy.yml
+  Define o processo automatico do GitHub Actions: a cada push na
+  branch main, ele instala as dependencias, builda o projeto
+  (`npm run build`) e publica o resultado no GitHub Pages.
+
+Arquivo: README.md
+  Vazio (nao preenchido).
+
+Arquivo: ATTRIBUTIONS.md
+  Creditos de licenca dos componentes shadcn/ui e fotos Unsplash
+  que vieram do scaffold original (a maioria nao e usada hoje).
+
+Arquivo: guidelines/Guidelines.md
+  Arquivo de instrucoes/guia do scaffold original (Figma Make),
+  nao especifico deste projeto.
+
+Arquivo: default_shadcn_theme.css
+  Arquivo de referencia do tema padrao shadcn/ui (nao importado
+  em lugar nenhum do app - so fica como referencia).
+
+
+----------------------------------------------------------------
+2.2 PASTA public/ (arquivos estaticos servidos direto)
+----------------------------------------------------------------
+
+Pasta: public/models/
+  Os 6 arquivos (3 pares de manifest.json + .bin) dos modelos de
+  reconhecimento facial, copiados do pacote @vladmandic/face-api:
+    - tiny_face_detector_model.bin (+ manifest)
+    - face_landmark_68_model.bin (+ manifest)
+    - face_recognition_model.bin (+ manifest)
+  Carregados por src/lib/faceRecognition.ts (funcao loadFaceModels).
+  Nao precisam ser editados manualmente.
+
+Pasta: public/known-faces/
+  Fotos de referencia das pessoas cadastradas em
+  src/data/knownPeople.ts. Nomes atuais: joao-vitor.jpeg,
+  joao-miguel.jpeg, Alvaro.jpeg, Isabela.jpeg, Pamela.jpeg.
+  ATENCAO: knownPeople.ts tambem tem uma entrada "Milena" apontando
+  pra Milena.jpeg, mas esse arquivo ainda NAO existe nessa pasta -
+  falta adicionar a foto pra essa pessoa ser reconhecida.
+
+
+----------------------------------------------------------------
+2.3 PASTA src/ (codigo-fonte)
+----------------------------------------------------------------
+
+Arquivo: src/main.tsx
+  Ponto de entrada do React. Monta <App /> na div#root e importa
+  os estilos globais (src/styles/index.css).
+
+Arquivo: src/vite-env.d.ts
+  Arquivo de tipos do Vite (so uma linha: referencia os tipos de
+  "vite/client"). Necessario pro TypeScript reconhecer coisas como
+  import.meta.env.BASE_URL usado em varios lugares do projeto.
+
+Arquivo: src/app/App.tsx (1106 linhas - o arquivo mais importante)
+  Componente principal, contem TODO o fluxo do app. Ja detalhado
+  na secao 1.3. Estrutura interna, por ordem:
+    - linha 40-ish: tipos (Step, PunchType, MoodType) e as listas
+      de opcoes/rotulos (PUNCH_OPTIONS, MOOD_OPTIONS, etc.)
+    - linha 113: componente ScanLine (linha animada de scan)
+    - linha 128: componente ScanOverlay (moldura decorativa)
+    - linha 156: componente ProgressBar (barra de progresso do topo)
+    - linha 202: funcao App() - o componente principal
+      - estados (useState) agrupados por assunto: fluxo
+        principal, reconhecimento facial, modal de historico
+      - useEffect do relogio do cabecalho
+      - useEffect que carrega os modelos de IA (loadFaceModels +
+        initKnownFaces)
+      - useEffect(s) que ligam/desligam a webcam conforme a tela
+      - handleFileChange, startRecognition, handlePunchSelect,
+        handleMoodSelect, handleConfirm, openHistory,
+        handleHistoryQueryChange, handleReset (funcoes de acao)
+      - renderScanArea (area da camera/imagem reaproveitada em
+        duas telas)
+      - o JSX de retorno: cabecalho, barra de progresso, card com
+        as 7 telas do fluxo (AnimatePresence), rodape, Toaster
+        (notificacoes) e o modal de historico
+
+Arquivo: src/data/knownPeople.ts
+  Lista das pessoas cadastradas (ver secao 1.4). Cada entrada tem
+  id, name, role, matricula e image (caminho da foto).
+
+Arquivo: src/lib/faceRecognition.ts
+  Toda a integracao com @vladmandic/face-api (ver secao 1.4 pro
+  resumo tecnico). Exporta loadFaceModels, initKnownFaces,
+  recognizeFace, e os tipos KnownPerson/RecognitionResult.
+
+Arquivo: src/lib/recordsStorage.ts
+  Leitura/escrita do historico no localStorage (ver secao 1.5).
+  Exporta saveRecord, getAllRecords, getRecordsByName, e o tipo
+  PunchRecord.
+
+Pasta: src/app/components/ui/
+  Biblioteca inteira de componentes shadcn/ui (accordion, button,
+  dialog, tabs, sidebar, etc. - mais de 40 arquivos) que veio
+  junto com o scaffold original do projeto (gerado por uma
+  ferramenta chamada Figma Make). NENHUM desses arquivos e
+  importado ou usado em lugar nenhum do app atual - o App.tsx foi
+  construido do zero com HTML + Tailwind + Framer Motion direto,
+  sem usar essa biblioteca. Ficam ai como "caixa de ferramentas"
+  disponivel caso um dia o projeto queira usar componentes prontos
+  (ex: um Dialog do shadcn em vez do modal customizado que
+  fizemos na mao para o historico).
+
+Pasta: src/app/components/figma/
+  Contem so o arquivo ImageWithFallback.tsx, tambem herdado do
+  scaffold e nao usado atualmente.
+
+Pasta: src/styles/
+  Arquivo: src/styles/index.css - importa os 3 arquivos abaixo,
+    na ordem: fonts.css, tailwind.css, theme.css.
+  Arquivo: src/styles/fonts.css - importa as fontes Google Inter
+    e Poppins usadas no app.
+  Arquivo: src/styles/tailwind.css - liga o Tailwind CSS v4 e o
+    plugin tw-animate-css.
+  Arquivo: src/styles/theme.css - define as variaveis de cor do
+    tema (--primary, --accent, --secondary etc, em modo claro e
+    escuro) usadas pelas classes Tailwind tipo `bg-primary`,
+    `text-accent`.
+  Arquivo: src/styles/globals.css - arquivo vazio, nao importado
+    em lugar nenhum (sobra do scaffold).
+
+
+================================================================
+ PARTE 3 - HISTORICO, LIMITACOES E COMANDOS
+================================================================
+
+----------------------------------------------------------------
+3.1 HISTORICO COMPLETO DO QUE FOI FEITO
 ----------------------------------------------------------------
 
 a) Correcoes de bugs na tela original (antes do reconhecimento)
-   - Corrigido um "vazamento" de intervalo (setInterval) na
-     simulacao de reconhecimento: cliques duplos no botao
-     "Iniciar Reconhecimento" podiam deixar um timer rodando
-     escondido, fazendo a tela mudar sozinha depois.
-   - Adicionada limpeza (cleanup) desse timer ao desmontar o
-     componente e ao resetar o fluxo.
-   - Suavizada a transicao entre telas (o card agora anima a
-     mudanca de altura em vez de "pular" de tamanho).
+   - Corrigido um "vazamento" de setInterval que podia deixar um
+     timer rodando escondido e mudar a tela sozinha depois de um
+     clique duplo em "Iniciar Reconhecimento".
+   - Suavizada a transicao entre telas (altura do card anima em
+     vez de "pular").
 
 b) Configuracao do repositorio Git / GitHub
-   - Criado .gitignore (excluindo node_modules, dist, logs etc.)
-   - git init, primeiro commit e push para
+   - .gitignore, primeiro commit, push para
      https://github.com/JVRosado/RelogioDePonto
 
 c) Implementacao do reconhecimento facial de verdade
-   - Instalado @vladmandic/face-api e copiados os modelos
-     necessarios para public/models/.
-   - Criado src/lib/faceRecognition.ts (carregar modelos, gerar
-     descritores, comparar rostos).
-   - Criado src/data/knownPeople.ts (pessoas cadastradas direto
-     no codigo, sem tela de cadastro, conforme pedido).
-   - Adicionadas duas formas de "escanear": camera real
-     (getUserMedia) ou selecionar uma imagem de teste (upload).
-   - Troca da simulacao falsa de progresso pela deteccao real,
-     com toast de erro ("Rosto nao reconhecido") quando nao
-     encontra ninguem.
-   - Testado em navegador headless (Playwright) simulando camera
-     falsa e upload de imagem, sem erros.
+   - @vladmandic/face-api + modelos em public/models/.
+   - src/lib/faceRecognition.ts e src/data/knownPeople.ts criados.
+   - Duas formas de escanear: camera real (getUserMedia) ou
+     imagem de teste (upload).
+   - Toast de erro ("Rosto nao reconhecido") quando nao encontra
+     ninguem.
 
-d) Bug encontrado e corrigido: reconhecimento nao funcionava
-   - Causa 1: extensao de arquivo errada no codigo (.jpg em vez
-     de .jpeg) fazia a foto de referencia dar 404 e nunca
-     carregar.
-   - Causa 2: o tamanho de deteccao configurado (inputSize: 320)
-     dava uma pontuacao de confianca baixa demais (0.22) para
-     aquela foto especifica, abaixo do limiar aceito (0.5). Como
-     o modelo TinyFaceDetector nao e "linear" (nem sempre um
-     tamanho maior da resultado melhor), o tamanho 320 caiu numa
-     "zona ruim" para aquela foto. Corrigido para inputSize: 416
-     (que e inclusive o padrao recomendado pela propria
-     biblioteca), passando a pontuacao para 0.98+.
+d) Bugs de reconhecimento corrigidos
+   - Extensao de arquivo errada (.jpg vs .jpeg) fazia a foto de
+     referencia dar 404.
+   - inputSize do detector (320) dava confianca baixa demais
+     (0.22) numa foto real; trocado pra 416 (padrao recomendado
+     pela biblioteca), subindo a confianca pra 0.98+.
 
 e) Publicacao no GitHub Pages
-   - Ajustado vite.config.ts com o "base" correto para funcionar
-     em subpasta.
-   - Corrigidos os caminhos de modelos e fotos para usar
-     import.meta.env.BASE_URL (senao dava 404 quando publicado,
-     mesmo funcionando local).
-   - Criado o workflow do GitHub Actions
-     (.github/workflows/deploy.yml) para build + deploy
-     automatico a cada push.
-   - Decisao de privacidade: inicialmente as fotos de referencia
-     foram excluidas do repositorio (.gitignore) para nao expor
-     dados pessoais publicamente.
-   - O usuario percebeu que, sem nenhuma foto publicada, o site
-     no ar nunca reconhecia ninguem (comportamento esperado). Foi
-     decidido entao publicar a foto de referencia mesmo assim,
-     revertendo a exclusao no .gitignore.
-   - Confirmado via GitHub Actions API e testes diretos (curl)
-     que o site, a foto e os modelos estao todos no ar e
-     respondendo corretamente.
+   - vite.config.ts com "base" correto pra subpasta.
+   - Caminhos de modelos/fotos usando import.meta.env.BASE_URL.
+   - Workflow do GitHub Actions (.github/workflows/deploy.yml)
+     pra build + deploy automatico a cada push.
+   - Decisao consciente de publicar a foto de referencia (mesmo
+     sendo dado pessoal) pra o reconhecimento funcionar no link
+     publico - documentado no proprio knownPeople.ts.
+
+f) Botao de correcao "Nao e voce? Escanear novamente"
+   Arquivo: src/app/App.tsx (linha 846) - permite voltar pra tela
+   de camera se o sistema reconheceu a pessoa errada, sem
+   precisar recarregar a pagina.
+
+g) Correcao de tela branca (Chrome traduzindo a pagina)
+   O tradutor automatico do Chrome mexe no DOM por fora do React;
+   quando o React tenta atualizar esse mesmo trecho, pode quebrar
+   e derrubar a tela toda (fica branca). Corrigido com
+   `<html lang="pt-BR" translate="no">` e a meta tag
+   `<meta name="google" content="notranslate">` em index.html.
+
+h) Historico de registros salvo no localStorage
+   - src/lib/recordsStorage.ts criado (sem backend/banco de
+     dados - tudo no navegador).
+   - Cada "Confirmar Registro" salva automaticamente.
+   - Botao "Ver Registros" na tela de camera abre um modal que ja
+     mostra todos os registros, com filtro por nome em tempo real.
+
+i) Mais pessoas cadastradas
+   joao-miguel, Alvaro Gabriel, Isabella, Pamela e Milena Nunes
+   adicionados em src/data/knownPeople.ts (a foto da Milena ainda
+   falta ser incluida - ver aviso na secao 2.2).
+
+j) Comentarios explicativos adicionados em todo o codigo
+   (App.tsx, faceRecognition.ts, recordsStorage.ts,
+   knownPeople.ts, main.tsx, vite.config.ts) e este documento
+   reescrito de forma bem mais detalhada, cobrindo todos os
+   arquivos do projeto.
 
 
 ----------------------------------------------------------------
-6. LIMITACOES CONHECIDAS (por ser prototipo)
+3.2 LIMITACOES CONHECIDAS (por ser prototipo)
 ----------------------------------------------------------------
 - Sem cadastro pela interface: adicionar/remover pessoa exige
   mexer no codigo e fazer um novo commit.
-- Sem banco de dados: nenhum registro de ponto e realmente salvo
-  em lugar nenhum (e so uma simulacao visual do fluxo).
+- Sem banco de dados central: cada registro fica isolado no
+  localStorage de quem bateu o ponto (ver secao 1.5) - nao existe
+  um lugar unico pra ver os registros de todo mundo.
 - Fotos de referencia ficam publicas no repositorio/site (sem
-  controle de acesso).
+  controle de acesso) - decisao consciente tomada durante o
+  desenvolvimento.
 - Todo o processamento de reconhecimento roda no navegador do
-  usuario (client-side) - nao ha nenhum backend/servidor.
+  usuario (client-side), sem nenhum backend/servidor.
 - O pacote de modelos de IA deixa o site relativamente pesado
-  (~7 MB de modelos + biblioteca de IA), o que e normal para
-  reconhecimento facial rodando 100% no navegador.
+  (~7 MB de modelos + biblioteca de IA), normal para
+  reconhecimento facial 100% no navegador.
+- A pessoa "Milena Nunes" esta cadastrada no codigo mas ainda sem
+  foto correspondente em public/known-faces/ (ver secao 2.2).
 
 
 ----------------------------------------------------------------
-7. COMANDOS UTEIS
+3.3 COMANDOS UTEIS
 ----------------------------------------------------------------
-npm install        -> instala as dependencias
-npm run dev         -> roda o site localmente em modo desenvolvimento
-npm run build       -> gera a versao de producao (pasta dist/)
-npm run preview     -> serve a versao de producao localmente
+npm install          -> instala as dependencias
+npm run dev            -> roda o site localmente em modo desenvolvimento
+npm run build           -> gera a versao de producao (pasta dist/)
+npm run preview        -> serve a versao de producao localmente
 
 git add .
 git commit -m "mensagem"
-git push             -> publica as mudancas (dispara o deploy automatico)
+git push                -> publica as mudancas (dispara o deploy automatico)
 ================================================================

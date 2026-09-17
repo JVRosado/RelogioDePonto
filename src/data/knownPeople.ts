@@ -1,13 +1,28 @@
+// ============================================================================
+// knownPeople.ts — Pessoas "pré-cadastradas" no protótipo
+// ----------------------------------------------------------------------------
+// Não existe tela de cadastro no app: quem vai ser reconhecido é definido
+// aqui, direto no código. Para adicionar alguém:
+//   1. Salve uma foto do rosto (de frente, bem iluminada) em
+//      public/known-faces/nome-do-arquivo.jpg
+//   2. Acrescente um novo objeto no array abaixo, com o campo `image`
+//      apontando pro MESMO nome de arquivo (maiúsculas/minúsculas e a
+//      extensão, tipo .jpg vs .jpeg, precisam bater exatamente — senão a
+//      foto dá 404 e a pessoa nunca é reconhecida).
+//   3. git add / commit / push — o GitHub Actions publica sozinho.
+//
+// As fotos em public/known-faces/ vão pro repositório e ficam públicas no
+// site publicado (decisão consciente tomada para este protótipo).
+//
+// Quem realmente usa essa lista é src/lib/faceRecognition.ts (função
+// initKnownFaces, chamada a partir de App.tsx).
+// ============================================================================
+
 import type { KnownPerson } from "../lib/faceRecognition";
 
-/**
- * Pessoas "pré-cadastradas" no protótipo, direto no código (sem tela de
- * cadastro). Para adicionar alguém: coloque uma foto do rosto em
- * public/known-faces/ e acrescente uma entrada aqui apontando pra ela.
- *
- * As fotos em public/known-faces/ vão pro repositório e ficam públicas no
- * site publicado (decisão consciente para este protótipo).
- */
+// import.meta.env.BASE_URL é o "base" do Vite (ver vite.config.ts) — sem
+// isso, os caminhos das fotos quebrariam quando o site está publicado numa
+// subpasta (GitHub Pages).
 const KNOWN_FACES_URL = `${import.meta.env.BASE_URL}known-faces`;
 
 export const KNOWN_PEOPLE: KnownPerson[] = [
@@ -47,6 +62,10 @@ export const KNOWN_PEOPLE: KnownPerson[] = [
     image: `${KNOWN_FACES_URL}/Pamela.jpeg`,
   },
   {
+    // ATENÇÃO: não existe public/known-faces/Milena.jpeg neste momento —
+    // essa entrada vai gerar um aviso no console ("não foi possível
+    // carregar a foto de referência") e a Milena nunca será reconhecida até
+    // essa foto ser adicionada.
     id: "Milena",
     name: "Milena Nunes",
     role: "Jovem Aprendzi",
@@ -54,4 +73,3 @@ export const KNOWN_PEOPLE: KnownPerson[] = [
     image: `${KNOWN_FACES_URL}/Milena.jpeg`,
   },
 ];
-

@@ -1,3 +1,13 @@
+// ============================================================================
+// App.tsx — Componente principal do MoodPoint
+// ----------------------------------------------------------------------------
+// Controla TODO o fluxo do app: máquina de estados das telas (Step), câmera
+// (getUserMedia), upload de imagem de teste, chamada do reconhecimento facial
+// (src/lib/faceRecognition.ts), o salvamento de registros no navegador
+// (src/lib/recordsStorage.ts) e o modal de histórico. Não usa nenhum backend
+// nem banco de dados — tudo roda no navegador do usuário.
+// ============================================================================
+
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Toaster, toast } from "sonner";
@@ -23,12 +33,19 @@ import { loadFaceModels, initKnownFaces, recognizeFace, type KnownPerson } from 
 import { KNOWN_PEOPLE } from "../data/knownPeople";
 import { saveRecord, getRecordsByName, type PunchRecord } from "../lib/recordsStorage";
 
+// Cada valor de "Step" é uma tela do fluxo principal (renderizadas mais
+// abaixo, dentro do <AnimatePresence>). "recognizing" é uma etapa
+// intermediária (tela "Analisando...") que não fica visível na barra de
+// progresso como um passo próprio.
 type Step = "camera" | "recognizing" | "confirmed" | "punchType" | "mood" | "summary";
 
+// Os 4 tipos de batida de ponto que o usuário pode escolher na tela "punchType".
 type PunchType = "entrada" | "inicio_intervalo" | "fim_intervalo" | "saida";
 
+// As 5 opções de humor da tela "mood" (usadas só para fins de bem-estar).
 type MoodType = "very_good" | "good" | "neutral" | "bad" | "very_bad";
 
+// Dados usados para desenhar os botões da tela "Qual registro deseja realizar?"
 const PUNCH_OPTIONS: { id: PunchType; label: string; icon: React.ReactNode; color: string }[] = [
   { id: "entrada", label: "Entrada", icon: <LogIn size={28} />, color: "#0F4C5C" },
   { id: "inicio_intervalo", label: "Início do Intervalo", icon: <Coffee size={28} />, color: "#1a7a96" },
@@ -36,6 +53,7 @@ const PUNCH_OPTIONS: { id: PunchType; label: string; icon: React.ReactNode; colo
   { id: "saida", label: "Saída", icon: <LogOut size={28} />, color: "#0a2b35" },
 ];
 
+// Dados usados para desenhar os botões da tela "Como está o seu humor?"
 const MOOD_OPTIONS: { id: MoodType; emoji: string; label: string }[] = [
   { id: "very_good", emoji: "😄", label: "Muito bem" },
   { id: "good", emoji: "🙂", label: "Bem" },
@@ -44,6 +62,8 @@ const MOOD_OPTIONS: { id: MoodType; emoji: string; label: string }[] = [
   { id: "very_bad", emoji: "😞", label: "Muito mal" },
 ];
 
+// Texto legível de cada PunchType — usado nas telas de resumo/confirmação e
+// também salvo no histórico de registros (src/lib/recordsStorage.ts).
 const PUNCH_LABELS: Record<PunchType, string> = {
   entrada: "Entrada",
   inicio_intervalo: "Início do Intervalo",
@@ -51,6 +71,7 @@ const PUNCH_LABELS: Record<PunchType, string> = {
   saida: "Saída",
 };
 
+// Texto legível (com emoji) de cada MoodType — mesma ideia do PUNCH_LABELS acima.
 const MOOD_LABELS: Record<MoodType, string> = {
   very_good: "😄 Muito bem",
   good: "🙂 Bem",
@@ -59,9 +80,15 @@ const MOOD_LABELS: Record<MoodType, string> = {
   very_bad: "😞 Muito mal",
 };
 
+// Ordem "oficial" das etapas, usada pelo ProgressBar pra calcular em qual
+// posição da barra de progresso o usuário está.
 const STEPS: Step[] = ["camera", "recognizing", "confirmed", "punchType", "mood", "summary"];
+// Rótulos exibidos embaixo de cada bolinha da barra de progresso (mesmo
+// índice de STEPS).
 const STEP_LABELS = ["Câmera", "Reconhecimento", "Confirmado", "Tipo de Registro", "Humor", "Resumo"];
 
+// Data de hoje por extenso em português (ex: "quarta-feira, 17 de setembro de 2026").
+// Usada na tela de resumo e salva no histórico de cada registro.
 const formatDate = () => {
   return new Date().toLocaleDateString("pt-BR", {
     weekday: "long",
@@ -71,6 +98,8 @@ const formatDate = () => {
   });
 };
 
+// Horário atual no formato HH:MM:SS. Usado no relógio do cabeçalho (atualizado
+// a cada segundo) e também como "horário do registro" quando o ponto é batido.
 const formatTime = () => {
   return new Date().toLocaleTimeString("pt-BR", {
     hour: "2-digit",
@@ -79,6 +108,8 @@ const formatTime = () => {
   });
 };
 
+// Linha animada que "varre" de cima a baixo dentro do círculo de rosto —
+// efeito visual usado só durante a etapa "recognizing" (via ScanOverlay).
 function ScanLine() {
   return (
     <motion.div
@@ -90,6 +121,10 @@ function ScanLine() {
   );
 }
 
+// Moldura decorativa (cantos + círculo tracejado + pulso) desenhada por cima
+// do vídeo da câmera ou da imagem de teste, nas telas "camera" e "recognizing".
+// Quando `scanning` é true (só na etapa "recognizing"), acrescenta a ScanLine
+// e um anel pulsante pra dar a sensação de "processando".
 function ScanOverlay({ scanning }: { scanning: boolean }) {
   return (
     <>
@@ -113,6 +148,11 @@ function ScanOverlay({ scanning }: { scanning: boolean }) {
   );
 }
 
+// Barra de progresso mostrada no topo da tela (exceto na tela final "Registro
+// Realizado"). Recebe a etapa atual e calcula, com base na posição dela dentro
+// de STEPS, quanto da barra preencher e quais bolinhas marcar como concluídas.
+// A etapa "recognizing" não aparece como uma bolinha própria (fica escondida
+// dentro do cálculo de progresso "Câmera -> Confirmado").
 function ProgressBar({ step }: { step: Step }) {
   const stepIndex = STEPS.indexOf(step);
   const visibleSteps = STEPS.filter(s => !["recognizing"].includes(s));
@@ -155,41 +195,54 @@ function ProgressBar({ step }: { step: Step }) {
   );
 }
 
+// Fonte da imagem usada pro reconhecimento: câmera real (getUserMedia) ou
+// uma imagem de teste escolhida pelo usuário (input file).
 type ScanMode = "camera" | "upload";
 
 export default function App() {
+  // --- Estado do fluxo principal (telas / registro em andamento) ---
   const [step, setStep] = useState<Step>("camera");
-  const [scanProgress, setScanProgress] = useState(0);
+  const [scanProgress, setScanProgress] = useState(0); // 0-100, barra "Processando biometria"
   const [selectedPunch, setSelectedPunch] = useState<PunchType | null>(null);
   const [selectedMood, setSelectedMood] = useState<MoodType | null>(null);
-  const [currentTime, setCurrentTime] = useState(formatTime());
-  const [registrationTime, setRegistrationTime] = useState("");
-  const [done, setDone] = useState(false);
+  const [currentTime, setCurrentTime] = useState(formatTime()); // relógio do cabeçalho
+  const [registrationTime, setRegistrationTime] = useState(""); // horário "congelado" no momento do registro
+  const [done, setDone] = useState(false); // true = mostrando a tela final "Registro Realizado"
 
+  // --- Estado do reconhecimento facial ---
   const [mode, setMode] = useState<ScanMode>("camera");
-  const [modelsReady, setModelsReady] = useState(false);
+  const [modelsReady, setModelsReady] = useState(false); // true depois que os modelos de IA + fotos cadastradas carregarem
   const [modelsError, setModelsError] = useState<string | null>(null);
-  const [cameraError, setCameraError] = useState<string | null>(null);
-  const [cameraReady, setCameraReady] = useState(false);
-  const [isRecognizing, setIsRecognizing] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null); // ex: usuário negou permissão da câmera
+  const [cameraReady, setCameraReady] = useState(false); // true quando o stream de vídeo já está anexado
+  const [isRecognizing, setIsRecognizing] = useState(false); // evita clique duplo em "Iniciar Reconhecimento"
   const [recognizedPerson, setRecognizedPerson] = useState<KnownPerson | null>(null);
-  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null); // object URL da imagem de teste
 
+  // --- Estado do modal "Ver Registros" (histórico salvo no localStorage) ---
   const [showHistory, setShowHistory] = useState(false);
-  const [historyQuery, setHistoryQuery] = useState("");
-  const [historyResults, setHistoryResults] = useState<PunchRecord[]>([]);
+  const [historyQuery, setHistoryQuery] = useState(""); // texto do filtro por nome
+  const [historyResults, setHistoryResults] = useState<PunchRecord[]>([]); // resultado já filtrado, exibido na lista
 
+  // Refs não causam re-render quando mudam — usadas aqui pra guardar
+  // "coisas do mundo real" (intervalo do timer, elemento <video>, stream da
+  // câmera, elemento <img> da imagem de teste) que o React não precisa
+  // observar diretamente.
   const progressInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const uploadedImgRef = useRef<HTMLImageElement>(null);
 
+  // Relógio do cabeçalho: atualiza a cada 1 segundo enquanto o app estiver aberto.
   useEffect(() => {
     const t = setInterval(() => setCurrentTime(formatTime()), 1000);
     return () => clearInterval(t);
   }, []);
 
-  // Carrega os modelos de reconhecimento facial e as fotos pré-cadastradas uma única vez
+  // Carrega os modelos de reconhecimento facial e as fotos pré-cadastradas uma única vez,
+  // assim que o componente monta. Isso pode levar de 1 a alguns segundos (baixa os
+  // arquivos de public/models/ e processa cada foto de public/known-faces/).
+  // Ver src/lib/faceRecognition.ts para os detalhes de como isso funciona.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -207,6 +260,9 @@ export default function App() {
     };
   }, []);
 
+  // Desliga a câmera: para todas as tracks do MediaStream e limpa a referência.
+  // Chamada tanto quando o usuário sai do modo câmera / sai da tela de
+  // reconhecimento, quanto quando o componente é desmontado.
   const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
@@ -214,7 +270,10 @@ export default function App() {
     setCameraReady(false);
   }, []);
 
-  // Liga/desliga a webcam conforme o modo escolhido e a etapa atual
+  // Liga/desliga a webcam conforme o modo escolhido (câmera vs. upload) e a
+  // etapa atual. A câmera só fica ativa durante as telas "camera" e
+  // "recognizing" — em qualquer outra etapa (ou no modo "upload"), ela é
+  // desligada pra não ficar consumindo a câmera do usuário à toa.
   useEffect(() => {
     let cancelled = false;
 
@@ -229,6 +288,8 @@ export default function App() {
         ?.getUserMedia({ video: { facingMode: "user" } })
         .then((stream) => {
           if (cancelled) {
+            // O efeito já foi limpo (ex: usuário trocou de tela rápido)
+            // antes da promise resolver — descarta esse stream.
             stream.getTracks().forEach((t) => t.stop());
             return;
           }
@@ -246,22 +307,38 @@ export default function App() {
     };
   }, [mode, step, stopCamera]);
 
-  // Garante que a câmera é desligada ao desmontar o componente
+  // Garante que a câmera é desligada ao desmontar o componente (ex: fechar a aba).
   useEffect(() => stopCamera, [stopCamera]);
 
+  // Limpeza de segurança: se o componente desmontar no meio de uma animação
+  // de progresso falsa (ver startRecognition), cancela o setInterval.
   useEffect(() => {
     return () => {
       if (progressInterval.current) clearInterval(progressInterval.current);
     };
   }, []);
 
+  // Disparado ao escolher um arquivo no input de "Imagem de teste". Cria uma
+  // URL local temporária (object URL) pra exibir a imagem escolhida na tela e
+  // alimentar o reconhecimento facial.
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (uploadedImageUrl) URL.revokeObjectURL(uploadedImageUrl);
+    if (uploadedImageUrl) URL.revokeObjectURL(uploadedImageUrl); // libera a URL anterior, se houver
     setUploadedImageUrl(URL.createObjectURL(file));
   };
 
+  // Coração do reconhecimento facial. Passos:
+  //  1. Valida que os modelos já carregaram e que há uma imagem disponível
+  //     (frame de vídeo ao vivo ou a imagem de teste escolhida).
+  //  2. Muda pra tela "recognizing" e começa uma barra de progresso FALSA
+  //     (puramente visual, incrementa até 90% enquanto espera o resultado
+  //     de verdade) — só pra dar feedback de "algo está acontecendo" enquanto
+  //     a IA processa.
+  //  3. Chama recognizeFace() (src/lib/faceRecognition.ts), que roda a
+  //     detecção de rosto de verdade e compara com as pessoas cadastradas.
+  //  4. Se reconheceu alguém, guarda a pessoa e avança pra tela "confirmed".
+  //     Se não, mostra um toast de erro e volta pra tela "camera".
   const startRecognition = async () => {
     if (isRecognizing || !modelsReady) return;
 
@@ -280,6 +357,8 @@ export default function App() {
     setStep("recognizing");
     setScanProgress(0);
 
+    // Progresso falso: sobe de 2 em 2 a cada 40ms, travado em 90% até o
+    // resultado real chegar (evita a barra "terminar" antes da hora).
     progressInterval.current = setInterval(() => {
       setScanProgress((p) => Math.min(p + 2, 90));
     }, 40);
@@ -294,6 +373,8 @@ export default function App() {
 
       if (result.person) {
         setRecognizedPerson(result.person);
+        // pequeno delay só pra deixar a barra chegar visualmente aos 100%
+        // antes de trocar de tela.
         setTimeout(() => setStep("confirmed"), 300);
       } else {
         toast.error("Rosto não reconhecido. Tente novamente.");
@@ -312,17 +393,25 @@ export default function App() {
     }
   };
 
+  // Usuário escolheu o tipo de registro (Entrada, Saída etc.) -> avança pra
+  // tela de humor.
   const handlePunchSelect = (punch: PunchType) => {
     setSelectedPunch(punch);
     setStep("mood");
   };
 
+  // Usuário escolheu o humor -> "congela" o horário atual (é esse horário que
+  // vai aparecer no resumo e ser salvo no registro) e avança pro resumo.
   const handleMoodSelect = (mood: MoodType) => {
     setSelectedMood(mood);
     setRegistrationTime(formatTime());
     setStep("summary");
   };
 
+  // Usuário confirmou o registro na tela de resumo: salva o registro no
+  // localStorage (ver src/lib/recordsStorage.ts) e mostra a tela final de
+  // sucesso. Só salva se tiver todos os dados necessários (guarda de
+  // segurança, não deveria acontecer de faltar algo nesse ponto do fluxo).
   const handleConfirm = () => {
     if (recognizedPerson && selectedPunch && selectedMood) {
       saveRecord({
@@ -336,17 +425,25 @@ export default function App() {
     setDone(true);
   };
 
+  // Abre o modal de histórico já carregado com TODOS os registros salvos
+  // (getRecordsByName("") retorna tudo — ver src/lib/recordsStorage.ts).
   const openHistory = () => {
     setHistoryQuery("");
     setHistoryResults(getRecordsByName(""));
     setShowHistory(true);
   };
 
+  // Chamado a cada tecla digitada no campo de busca do histórico: refaz a
+  // busca/filtro em tempo real (sem precisar apertar Enter ou um botão).
   const handleHistoryQueryChange = (value: string) => {
     setHistoryQuery(value);
     setHistoryResults(getRecordsByName(value));
   };
 
+  // Volta pro início do fluxo (usado tanto pelo botão "Novo Registro" da tela
+  // final quanto pelo "Não é você? Escanear novamente" da tela de confirmação).
+  // Limpa todo o estado do registro em andamento; a câmera é religada
+  // automaticamente pelo efeito acima assim que `step` voltar pra "camera".
   const handleReset = () => {
     if (progressInterval.current) {
       clearInterval(progressInterval.current);
@@ -362,12 +459,18 @@ export default function App() {
     setDone(false);
   };
 
+  // Variantes de animação (entrar deslizando da direita, sair deslizando pra
+  // esquerda) reaproveitadas por todas as telas do fluxo principal.
   const slideVariants = {
     enter: { opacity: 0, x: 40 },
     center: { opacity: 1, x: 0 },
     exit: { opacity: 0, x: -40 },
   };
 
+  // Área quadrada usada nas telas "camera" e "recognizing" pra mostrar o
+  // vídeo ao vivo (modo câmera) ou a imagem de teste escolhida (modo
+  // upload), com a moldura decorativa (ScanOverlay) por cima. `scanning`
+  // controla se mostra o efeito de "escaneando" (linha + pulso).
   const renderScanArea = (scanning: boolean) => (
     <div className="relative w-72 h-72 bg-gradient-to-br from-primary/5 to-primary/10 rounded-3xl overflow-hidden flex items-center justify-center border-2 border-dashed border-primary/20">
       {mode === "camera" ? (
@@ -392,6 +495,8 @@ export default function App() {
           className="absolute inset-0 w-full h-full object-cover"
         />
       ) : (
+        // Nenhuma imagem escolhida ainda no modo upload: mostra o
+        // convite pra clicar/tocar e abrir o seletor de arquivos.
         <label className="flex flex-col items-center gap-3 text-muted-foreground cursor-pointer px-6 text-center">
           <ImageUp size={36} />
           <span className="text-sm font-medium">Toque para selecionar uma imagem de teste</span>
@@ -399,12 +504,16 @@ export default function App() {
         </label>
       )}
       <ScanOverlay scanning={scanning} />
+      {/* Indicador decorativo (bolinha) no canto, simulando um "LED" de câmera ativa */}
       <div className="absolute top-3 right-3 w-7 h-7 bg-accent rounded-full flex items-center justify-center">
         <div className="w-2.5 h-2.5 bg-white rounded-full" />
       </div>
     </div>
   );
 
+  // Controla se o botão "Iniciar Reconhecimento" pode ser clicado: precisa
+  // dos modelos carregados, não pode já estar reconhecendo, e precisa ter
+  // uma fonte de imagem pronta (câmera ativa ou imagem de teste escolhida).
   const canStartRecognition =
     modelsReady && !isRecognizing && (mode === "camera" ? cameraReady : Boolean(uploadedImageUrl));
 
@@ -413,7 +522,7 @@ export default function App() {
       className="min-h-screen flex flex-col"
       style={{ fontFamily: "'Inter', 'Poppins', sans-serif", background: "#f0f4f6" }}
     >
-      {/* Header */}
+      {/* Cabeçalho fixo: logo/nome do app + relógio ao vivo */}
       <header className="bg-primary shadow-md">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -434,24 +543,31 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main */}
+      {/* Conteúdo principal: barra de progresso + card com a tela atual */}
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-8">
-        {/* Progress indicator */}
+        {/* A barra de progresso some na tela final "Registro Realizado" */}
         {!done && (
           <div className="w-full max-w-lg mb-8">
             <ProgressBar step={step} />
           </div>
         )}
 
-        {/* Card */}
+        {/* Card branco que contém a tela atual. `layout` faz a altura do
+            card animar suavemente quando o conteúdo interno muda de
+            tamanho entre uma tela e outra (em vez de "pular"). */}
         <motion.div
           layout
           transition={{ layout: { duration: 0.3, ease: "easeInOut" } }}
           className="w-full max-w-lg bg-card rounded-3xl shadow-xl overflow-hidden"
           style={{ boxShadow: "0 8px 40px rgba(15,76,92,0.13)" }}
         >
+          {/* AnimatePresence com mode="wait": espera a tela atual terminar
+              de "sair" (exit) antes de montar a próxima, pra não sobrepor
+              as animações de transição. Só um bloco abaixo é renderizado
+              por vez, de acordo com `done` e `step`. */}
           <AnimatePresence mode="wait">
             {done ? (
+              // --- Tela: Registro Realizado (sucesso final) ---
               <motion.div
                 key="done"
                 variants={slideVariants}
@@ -501,6 +617,9 @@ export default function App() {
                 </button>
               </motion.div>
             ) : step === "camera" ? (
+              // --- Tela 1: Câmera (ponto de entrada do fluxo) ---
+              // Escolha entre câmera real ou imagem de teste, botão pra
+              // iniciar o reconhecimento e atalho pro histórico de registros.
               <motion.div
                 key="camera"
                 variants={slideVariants}
@@ -545,6 +664,8 @@ export default function App() {
 
                 {renderScanArea(false)}
 
+                {/* Mensagem de erro do carregamento dos modelos, ou o aviso
+                    padrão de "dados protegidos" quando está tudo certo */}
                 {modelsError ? (
                   <div className="flex items-center gap-2 text-destructive text-xs bg-destructive/10 px-4 py-2 rounded-xl">
                     <AlertCircle size={14} />
@@ -576,6 +697,7 @@ export default function App() {
                   )}
                 </button>
 
+                {/* Abre o modal de histórico (registros salvos no localStorage) */}
                 <button
                   onClick={openHistory}
                   className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-primary transition-colors duration-150"
@@ -585,6 +707,10 @@ export default function App() {
                 </button>
               </motion.div>
             ) : step === "recognizing" ? (
+              // --- Tela 2: Analisando... ---
+              // Etapa intermediária automática (o usuário não interage aqui):
+              // mostra a barra de progresso falsa enquanto startRecognition()
+              // roda a detecção de verdade em segundo plano.
               <motion.div
                 key="recognizing"
                 variants={slideVariants}
@@ -603,7 +729,7 @@ export default function App() {
 
                 {renderScanArea(true)}
 
-                {/* Progress bar */}
+                {/* Barra de progresso (puramente visual, ver startRecognition) */}
                 <div className="w-full space-y-2">
                   <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">Processando biometria</span>
@@ -618,6 +744,9 @@ export default function App() {
                   </div>
                 </div>
 
+                {/* Três "etapas" decorativas que vão acendendo conforme o
+                    progresso falso avança — não correspondem a chamadas
+                    reais separadas, é só efeito visual */}
                 <div className="grid grid-cols-3 gap-3 w-full text-xs text-center">
                   {["Detecção facial", "Mapeamento", "Validação"].map((label, i) => (
                     <div key={label} className={`py-2 px-1 rounded-xl transition-all duration-300 ${scanProgress > i * 33 ? "bg-primary/10 text-primary font-semibold" : "bg-secondary text-muted-foreground"}`}>
@@ -628,6 +757,10 @@ export default function App() {
                 </div>
               </motion.div>
             ) : step === "confirmed" ? (
+              // --- Tela 3: Identidade Confirmada ---
+              // Mostra quem foi reconhecido (recognizedPerson). Tem dois
+              // caminhos: "Continuar" (segue o fluxo normal) ou "Não é você?"
+              // (reconheceu a pessoa errada -> reseta e volta pra câmera).
               <motion.div
                 key="confirmed"
                 variants={slideVariants}
@@ -666,6 +799,8 @@ export default function App() {
                   </motion.p>
                 </div>
 
+                {/* Cartão com nome/cargo/matrícula da pessoa reconhecida
+                    (vem de KnownPerson, ver src/data/knownPeople.ts) */}
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -699,6 +834,8 @@ export default function App() {
                   <ChevronRight size={22} />
                 </motion.button>
 
+                {/* Botão de correção: reconheceu a pessoa errada -> reseta tudo
+                    e volta pra tela de câmera pra tentar de novo */}
                 <motion.button
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -710,6 +847,9 @@ export default function App() {
                 </motion.button>
               </motion.div>
             ) : step === "punchType" ? (
+              // --- Tela 4: Qual registro deseja realizar? ---
+              // Grade com os 4 tipos de ponto (PUNCH_OPTIONS). Escolher um
+              // avança direto pra tela de humor (handlePunchSelect).
               <motion.div
                 key="punchType"
                 variants={slideVariants}
@@ -754,6 +894,10 @@ export default function App() {
                 </div>
               </motion.div>
             ) : step === "mood" ? (
+              // --- Tela 5: Como está o seu humor? ---
+              // Fileira com as 5 opções de humor (MOOD_OPTIONS). Escolher uma
+              // avança pra tela de resumo (handleMoodSelect, que também
+              // "congela" o horário do registro).
               <motion.div
                 key="mood"
                 variants={slideVariants}
@@ -798,6 +942,11 @@ export default function App() {
                 </p>
               </motion.div>
             ) : step === "summary" ? (
+              // --- Tela 6: Confirmar Registro ---
+              // Resumo final de tudo antes de salvar: pessoa, data, horário,
+              // tipo e humor. "Voltar" retorna pra escolha de tipo de ponto;
+              // "Confirmar Registro" chama handleConfirm (salva no
+              // localStorage e mostra a tela de sucesso).
               <motion.div
                 key="summary"
                 variants={slideVariants}
@@ -853,7 +1002,7 @@ export default function App() {
         </motion.div>
       </main>
 
-      {/* Footer */}
+      {/* Rodapé fixo */}
       <footer className="py-4 text-center">
         <p className="text-xs text-muted-foreground">
           MoodPoint v2.1.0 &nbsp;·&nbsp; © 2026 Todos os direitos reservados &nbsp;·&nbsp;
@@ -861,9 +1010,15 @@ export default function App() {
         </p>
       </footer>
 
+      {/* Container das notificações toast (ex: "Rosto não reconhecido") */}
       <Toaster position="top-center" richColors />
 
-      {/* Histórico de registros (salvo localmente no navegador) */}
+      {/* Modal: Histórico de registros (salvo localmente no navegador, ver
+          src/lib/recordsStorage.ts). Fica fora do fluxo principal de telas —
+          pode ser aberto a partir da tela "camera" sem interromper o registro
+          em andamento (embora normalmente só seja aberto quando não há
+          nenhum em andamento). Clicar fora do card (no fundo escurecido)
+          fecha o modal. */}
       <AnimatePresence>
         {showHistory && (
           <motion.div
@@ -878,7 +1033,7 @@ export default function App() {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
               transition={{ duration: 0.2 }}
-              onClick={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()} // impede que o clique dentro do card feche o modal
               className="w-full max-w-lg max-h-[85vh] bg-card rounded-3xl shadow-xl overflow-hidden flex flex-col"
             >
               <div className="p-6 flex items-center justify-between border-b border-border flex-shrink-0">
@@ -894,6 +1049,9 @@ export default function App() {
               </div>
 
               <div className="p-6 flex flex-col gap-4 overflow-y-auto">
+                {/* Campo de filtro por nome — filtra em tempo real a cada
+                    tecla digitada (handleHistoryQueryChange), sem precisar
+                    de botão de busca */}
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
