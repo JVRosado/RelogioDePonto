@@ -181,8 +181,6 @@ A estrutura de pastas (ignorando node_modules, dist e .git):
   .github/workflows/deploy.yml
   README.md
   ATTRIBUTIONS.md
-  guidelines/Guidelines.md
-  default_shadcn_theme.css
   public/
     models/          (arquivos do modelo de IA)
     known-faces/      (fotos de referencia)
@@ -193,7 +191,6 @@ A estrutura de pastas (ignorando node_modules, dist e .git):
       App.tsx
       components/
         ui/           (biblioteca shadcn/ui - NAO USADA)
-        figma/         (componente auxiliar - NAO USADO)
     data/
       knownPeople.ts
     lib/
@@ -223,8 +220,6 @@ Arquivo: vite.config.ts
       dominio. Por isso o codigo usa import.meta.env.BASE_URL em
       vez de caminhos fixos tipo "/models" (ver secao 1.4/1.5).
     - alias `@` aponta pra pasta src/
-    - plugin figmaAssetResolver: heranca do scaffold original
-      (Figma Make), nao usado por nenhum arquivo atual.
 
 Arquivo: tsconfig.json
   Configuracao do TypeScript (modo strict ligado, JSX do React,
@@ -259,14 +254,6 @@ Arquivo: README.md
 Arquivo: ATTRIBUTIONS.md
   Creditos de licenca dos componentes shadcn/ui e fotos Unsplash
   que vieram do scaffold original (a maioria nao e usada hoje).
-
-Arquivo: guidelines/Guidelines.md
-  Arquivo de instrucoes/guia do scaffold original (Figma Make),
-  nao especifico deste projeto.
-
-Arquivo: default_shadcn_theme.css
-  Arquivo de referencia do tema padrao shadcn/ui (nao importado
-  em lugar nenhum do app - so fica como referencia).
 
 
 ----------------------------------------------------------------
@@ -353,10 +340,6 @@ Pasta: src/app/components/ui/
   disponivel caso um dia o projeto queira usar componentes prontos
   (ex: um Dialog do shadcn em vez do modal customizado que
   fizemos na mao para o historico).
-
-Pasta: src/app/components/figma/
-  Contem so o arquivo ImageWithFallback.tsx, tambem herdado do
-  scaffold e nao usado atualmente.
 
 Pasta: src/styles/
   Arquivo: src/styles/index.css - importa os 3 arquivos abaixo,
@@ -445,6 +428,14 @@ j) Comentarios explicativos adicionados em todo o codigo
    knownPeople.ts, main.tsx, vite.config.ts) e este documento
    reescrito de forma bem mais detalhada, cobrindo todos os
    arquivos do projeto.
+
+k) Removidas as partes ligadas ao Figma que nao eram usadas:
+   o plugin figmaAssetResolver do vite.config.ts, a pasta
+   src/app/components/figma/ (ImageWithFallback.tsx), o arquivo
+   default_shadcn_theme.css e guidelines/Guidelines.md (guia do
+   scaffold original "Figma Make"). A biblioteca shadcn/ui em
+   src/app/components/ui/ foi mantida por nao ser especifica do
+   Figma (so veio junto no mesmo scaffold).
 
 
 ----------------------------------------------------------------
