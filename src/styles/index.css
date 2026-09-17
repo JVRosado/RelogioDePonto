@@ -1,3 +1,6 @@
+/* Ponto de entrada dos estilos — importado uma única vez em src/main.tsx.
+   Ordem importa: fontes primeiro, depois o Tailwind, depois o tema (que usa
+   classes/variáveis que dependem do Tailwind já estar carregado). */
 @import './fonts.css';
 @import './tailwind.css';
 @import './theme.css';

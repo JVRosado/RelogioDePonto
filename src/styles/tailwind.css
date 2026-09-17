@@ -1,4 +1,26 @@
+/* ============================================================================
+   tailwind.css — Liga o Tailwind CSS v4 ao projeto
+   ----------------------------------------------------------------------------
+   Este arquivo usa sintaxe do Tailwind v4 (CSS-first, sem tailwind.config.js).
+   As linhas @import/@source abaixo NÃO são erro — é normal o linter de CSS
+   padrão do editor sublinhar elas em vermelho (ele não conhece essas
+   diretivas específicas do Tailwind), mas o build (via @tailwindcss/vite,
+   ver vite.config.ts) entende perfeitamente. `npm run build` compila sem
+   nenhum problema.
+   ============================================================================ */
+
+/* Importa as classes utilitárias do Tailwind (bg-primary, flex, rounded-xl,
+   etc. usadas em todo o src/app/App.tsx). `source(none)` desliga a busca
+   automática de arquivos desse import — quem diz onde procurar classes
+   usadas é a linha @source logo abaixo. */
 @import 'tailwindcss' source(none);
+
+/* Diz ao Tailwind para escanear esses arquivos (relativo a esta pasta,
+   src/styles/) atrás de nomes de classes usados, e assim gerar só o CSS
+   das classes realmente utilizadas no projeto. */
 @source '../**/*.{js,ts,jsx,tsx}';
 
+/* Biblioteca de utilitários de animação extra (classes tipo animate-in,
+   fade-in etc.) — não é usada diretamente pelo App.tsx hoje (as animações
+   do app vêm do Framer Motion), mas fica disponível caso precise.*/
 @import 'tw-animate-css';

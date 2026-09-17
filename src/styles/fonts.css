@@ -1,1 +1,5 @@
+/* Carrega as duas fontes do Google Fonts usadas no app:
+   - Inter: fonte padrão de todo o texto (`fontFamily: "'Inter', 'Poppins', sans-serif"` em App.tsx)
+   - Poppins: usada nos títulos e textos em destaque (aplicada via `style={{ fontFamily: "'Poppins', sans-serif" }}`
+     em vários elementos de App.tsx: nome "MoodPoint" no cabeçalho, títulos de cada tela, botões principais). */
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap");

@@ -1,36 +1,108 @@
+/* ============================================================================
+   theme.css — Cores, raio de borda e tipografia base do app
+   ----------------------------------------------------------------------------
+   Define variáveis CSS (custom properties) com as cores do tema, e depois
+   o bloco `@theme inline` (sintaxe do Tailwind v4) transforma cada uma
+   dessas variáveis numa classe Tailwind utilizável, tipo:
+     --primary  ->  bg-primary, text-primary, border-primary...
+     --accent   ->  bg-accent, text-accent, border-accent...
+   É por isso que App.tsx usa classes como `bg-primary` ou `text-accent`
+   sem precisar escrever a cor em hexadecimal direto no componente.
+   ============================================================================ */
+
+/* Permite usar a variante `dark:` do Tailwind baseada numa classe .dark no
+   HTML (ex: `dark:bg-primary`), em vez do padrão de detectar automaticamente
+   as preferências do sistema operacional. Hoje o app não alterna pra modo
+   escuro (não existe nenhum botão de tema), mas a estrutura de cores
+   abaixo já está pronta pra isso, no bloco `.dark`. */
 @custom-variant dark (&:is(.dark *));
 
+/* --- Cores do tema claro (usado por padrão em todo o app) --- */
 :root {
   --font-size: 16px;
+
+  /* --background: fundo da página (por trás do card) — na prática o app
+     usa um valor fixo "#f0f4f6" direto no style inline de App.tsx em vez
+     dessa variável, então mudar aqui não afeta o fundo da tela. */
   --background: #f0f4f6;
+  /* --foreground: cor de texto padrão (herdada pelo <body>). */
   --foreground: #0a2b35;
+
+  /* --card / --card-foreground: fundo branco e texto do "card" central
+     que contém cada tela do fluxo (classe `bg-card` em App.tsx). */
   --card: #ffffff;
   --card-foreground: #0a2b35;
+
+  /* --popover: não usada atualmente (nenhum popover no app). */
   --popover: #ffffff;
   --popover-foreground: #0a2b35;
+
+  /* --primary / --primary-foreground: a cor "azul petróleo" principal do
+     app — cabeçalho, textos de título (`text-primary`), botão "Voltar",
+     bordas da área de câmera (`border-primary/20`), etc. */
   --primary: #0F4C5C;
   --primary-foreground: #ffffff;
+
+  /* --secondary / --secondary-foreground: cinza-azulado claro usado nos
+     fundos "neutros" (`bg-secondary`) — cartões de opção (tipo de ponto,
+     humor), linhas do resumo, cards do histórico de registros. */
   --secondary: #e2edf0;
   --secondary-foreground: #0F4C5C;
+
+  /* --muted / --muted-foreground: usado pelo texto secundário/apagado
+     (`text-muted-foreground`) em quase todas as telas (legendas,
+     descrições, rótulos). --muted em si (o fundo) não é usado hoje. */
   --muted: #dde8eb;
   --muted-foreground: #4a7080;
+
+  /* --accent / --accent-foreground: a cor "laranja" de destaque — botão
+     principal "Iniciar Reconhecimento", ícones de ação, moldura de scan
+     (ScanOverlay), indicador de câmera ativa. É a cor que mais chama
+     atenção na interface. */
   --accent: #F47C20;
   --accent-foreground: #ffffff;
+
+  /* --destructive / --destructive-foreground: vermelho usado nas mensagens
+     de erro (câmera indisponível, falha ao carregar os modelos de IA) —
+     classes `text-destructive` / `bg-destructive/10` em App.tsx. */
   --destructive: #d4183d;
   --destructive-foreground: #ffffff;
+
+  /* --border: cor das bordas/divisórias sutis (`border-border`,
+     `divide-border`) — usada no modal de histórico e no cabeçalho do card. */
   --border: rgba(15, 76, 92, 0.12);
+  /* --input: não usada diretamente (o campo de busca do histórico usa
+     --input-background, logo abaixo, não esta). */
   --input: transparent;
+  /* --input-background: fundo do campo de texto de busca do histórico de
+     registros (`bg-input-background`, ver o <input> do modal em App.tsx). */
   --input-background: #e8f0f3;
+  /* --switch-background: não usada (nenhum componente Switch no app). */
   --switch-background: #9bbac4;
+
   --font-weight-medium: 500;
   --font-weight-normal: 400;
+
+  /* --ring: cor do contorno de foco ao clicar/tabular no campo de busca do
+     histórico (`focus:ring-accent`, mesma cor do --accent). */
   --ring: #F47C20;
+
+  /* --chart-1 a --chart-5: paleta pra gráficos — não usada (o app não tem
+     nenhum gráfico/chart). */
   --chart-1: #F47C20;
   --chart-2: #0F4C5C;
   --chart-3: #1a7a96;
   --chart-4: #f9a05c;
   --chart-5: #0d3a47;
+
+  /* --radius: raio de borda base. Só afeta as classes `rounded-lg` e
+     `rounded-xl` (via --radius-lg/--radius-xl no bloco @theme abaixo) —
+     as classes `rounded-2xl`/`rounded-3xl` usadas nos cards do app vêm da
+     escala padrão do Tailwind, não dessa variável. */
   --radius: 1rem;
+
+  /* --sidebar-*: paleta pra um componente de barra lateral — não usada
+     (o app não tem sidebar). */
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: #030213;
@@ -41,6 +113,10 @@
   --sidebar-ring: oklch(0.708 0 0);
 }
 
+/* --- Cores do tema escuro --- */
+/* Só entram em vigor se alguém adicionar a classe "dark" na tag <html> —
+   hoje nada no app faz isso, então este bloco fica sem efeito na prática.
+   Mantido pronto caso um dia seja adicionado um botão de alternar tema. */
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
@@ -78,6 +154,9 @@
   --sidebar-ring: oklch(0.439 0 0);
 }
 
+/* Ponte entre as variáveis CSS acima e as classes utilitárias do Tailwind
+   (sintaxe do Tailwind v4). Cada linha aqui é o que permite escrever, por
+   exemplo, `bg-primary` no JSX em vez de `style={{ background: '#0F4C5C' }}`. */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -105,6 +184,7 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  /* --radius-sm não é usada por nenhuma classe `rounded-sm` no app hoje. */
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -119,11 +199,18 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
+/* Estilos base aplicados direto nas tags HTML (não em classes) — o
+   Tailwind aplica isso com prioridade baixa, então qualquer classe
+   utilitária (`text-sm`, `font-bold` etc.) escrita no componente sempre
+   vence essas regras aqui. */
 @layer base {
+  /* Toda borda no app usa a cor --border por padrão, e o anel de foco
+     (contorno ao navegar com Tab) usa --ring com 50% de opacidade. */
   * {
     @apply border-border outline-ring/50;
   }
 
+  /* Fundo e cor de texto padrão da página inteira. */
   body {
     @apply bg-background text-foreground;
   }
@@ -137,12 +224,18 @@
     font-size: var(--font-size);
   }
 
+  /* Nenhuma tag <h1> é usada no app (App.tsx usa <h2> pros títulos de
+     tela), mas esse estilo fica pronto caso adicione um <h1> no futuro. */
   h1 {
     font-size: var(--text-2xl);
     font-weight: var(--font-weight-medium);
     line-height: 1.5;
   }
 
+  /* Estilo base dos títulos de cada tela do fluxo (ex: "Reconhecimento
+     Facial", "Qual registro deseja realizar?") — na prática, App.tsx
+     sobrescreve isso com `text-2xl font-bold` direto na classe, então
+     esses valores daqui quase não aparecem visualmente. */
   h2 {
     font-size: var(--text-xl);
     font-weight: var(--font-weight-medium);
@@ -161,18 +254,25 @@
     line-height: 1.5;
   }
 
+  /* Nenhum <label> é usado no app hoje (o campo de busca do histórico usa
+     só um <input> com placeholder). */
   label {
     font-size: var(--text-base);
     font-weight: var(--font-weight-medium);
     line-height: 1.5;
   }
 
+  /* Afeta todos os <button> do app (a maioria sobrescreve o tamanho da
+     fonte via classes tipo `text-lg`/`text-sm`, mas o peso/line-height
+     base vem daqui quando não especificado). */
   button {
     font-size: var(--text-base);
     font-weight: var(--font-weight-medium);
     line-height: 1.5;
   }
 
+  /* Afeta o <input> de texto do modal "Ver Registros" (campo de busca por
+     nome) e o <input type="file"> (escondido) de upload de imagem. */
   input {
     font-size: var(--text-base);
     font-weight: var(--font-weight-normal);
