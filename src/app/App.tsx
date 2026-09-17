@@ -15,9 +15,13 @@ import {
   Camera,
   ImageUp,
   Loader2,
+  History,
+  X,
+  Search,
 } from "lucide-react";
 import { loadFaceModels, initKnownFaces, recognizeFace, type KnownPerson } from "../lib/faceRecognition";
 import { KNOWN_PEOPLE } from "../data/knownPeople";
+import { saveRecord, getRecordsByName, type PunchRecord } from "../lib/recordsStorage";
 
 type Step = "camera" | "recognizing" | "confirmed" | "punchType" | "mood" | "summary";
 
@@ -171,6 +175,10 @@ export default function App() {
   const [recognizedPerson, setRecognizedPerson] = useState<KnownPerson | null>(null);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
 
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyQuery, setHistoryQuery] = useState("");
+  const [historyResults, setHistoryResults] = useState<PunchRecord[] | null>(null);
+
   const progressInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -316,7 +324,27 @@ export default function App() {
   };
 
   const handleConfirm = () => {
+    if (recognizedPerson && selectedPunch && selectedMood) {
+      saveRecord({
+        personName: recognizedPerson.name,
+        punchTypeLabel: PUNCH_LABELS[selectedPunch],
+        moodLabel: MOOD_LABELS[selectedMood],
+        date: formatDate(),
+        time: registrationTime,
+      });
+    }
     setDone(true);
+  };
+
+  const openHistory = () => {
+    setHistoryQuery("");
+    setHistoryResults(null);
+    setShowHistory(true);
+  };
+
+  const handleHistorySearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setHistoryResults(getRecordsByName(historyQuery));
   };
 
   const handleReset = () => {
@@ -546,6 +574,14 @@ export default function App() {
                       Iniciar Reconhecimento
                     </>
                   )}
+                </button>
+
+                <button
+                  onClick={openHistory}
+                  className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-primary transition-colors duration-150"
+                >
+                  <History size={16} />
+                  Ver Registros
                 </button>
               </motion.div>
             ) : step === "recognizing" ? (
@@ -826,6 +862,92 @@ export default function App() {
       </footer>
 
       <Toaster position="top-center" richColors />
+
+      {/* Histórico de registros (salvo localmente no navegador) */}
+      <AnimatePresence>
+        {showHistory && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            onClick={() => setShowHistory(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ duration: 0.2 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-lg max-h-[85vh] bg-card rounded-3xl shadow-xl overflow-hidden flex flex-col"
+            >
+              <div className="p-6 flex items-center justify-between border-b border-border flex-shrink-0">
+                <h2 className="text-xl font-bold text-primary" style={{ fontFamily: "'Poppins', sans-serif" }}>
+                  Histórico de Registros
+                </h2>
+                <button
+                  onClick={() => setShowHistory(false)}
+                  className="text-muted-foreground hover:text-primary transition-colors duration-150"
+                >
+                  <X size={22} />
+                </button>
+              </div>
+
+              <div className="p-6 flex flex-col gap-4 overflow-y-auto">
+                <form onSubmit={handleHistorySearch} className="flex gap-2">
+                  <input
+                    type="text"
+                    value={historyQuery}
+                    onChange={(e) => setHistoryQuery(e.target.value)}
+                    placeholder="Digite o nome do colaborador"
+                    autoFocus
+                    className="flex-1 px-4 py-3 rounded-xl border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+                  />
+                  <button
+                    type="submit"
+                    className="px-4 rounded-xl bg-accent text-white font-semibold flex items-center justify-center hover:bg-accent/90 active:scale-95 transition-all duration-150"
+                  >
+                    <Search size={18} />
+                  </button>
+                </form>
+
+                {historyResults === null ? (
+                  <p className="text-sm text-muted-foreground text-center py-8">
+                    Digite um nome e busque para ver os registros salvos neste navegador.
+                  </p>
+                ) : historyResults.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-8">
+                    Nenhum registro encontrado para "{historyQuery}".
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    {historyResults.map((r) => (
+                      <div key={r.id} className="bg-secondary rounded-2xl px-5 py-4 text-sm space-y-2">
+                        <div className="flex justify-between items-center gap-2">
+                          <span className="font-bold text-foreground">{r.personName}</span>
+                          <span className="text-xs text-muted-foreground text-right">{r.date}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Tipo</span>
+                          <span className="font-semibold text-foreground">{r.punchTypeLabel}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Humor</span>
+                          <span className="font-semibold text-foreground">{r.moodLabel}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Horário</span>
+                          <span className="font-semibold font-mono text-foreground">{r.time}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
