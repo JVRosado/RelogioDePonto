@@ -475,7 +475,7 @@ export default function App() {
     <div className="relative w-72 h-72 bg-gradient-to-br from-primary/5 to-primary/10 rounded-3xl overflow-hidden flex items-center justify-center border-2 border-dashed border-primary/20">
       {mode === "camera" ? (
         <>
-          <video ref={videoRef} autoPlay muted playsInline className="absolute inset-0 w-full h-full object-cover" />
+          <video ref={videoRef} autoPlay muted playsInline className="absolute inset-0 w-full h-full object-cover -scale-x-100" />
           {!cameraReady && !cameraError && (
             <div className="absolute inset-0 flex items-center justify-center bg-primary/5">
               <Loader2 size={28} className="animate-spin text-primary/50" />
