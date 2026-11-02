@@ -61,15 +61,28 @@ export const KNOWN_PEOPLE: KnownPerson[] = [
     matricula: "#0005",
     image: `${KNOWN_FACES_URL}/Pamela.jpeg`,
   },
+  
   {
-    // ATENÇÃO: não existe public/known-faces/Milena.jpeg neste momento —
-    // essa entrada vai gerar um aviso no console ("não foi possível
-    // carregar a foto de referência") e a Milena nunca será reconhecida até
-    // essa foto ser adicionada.
-    id: "Milena",
-    name: "Milena Nunes",
+    id: "Evellyn",
+    name: "Evellyn",
     role: "Jovem Aprendzi",
     matricula: "#0006",
-    image: `${KNOWN_FACES_URL}/Milena.jpeg`,
+    image: `${KNOWN_FACES_URL}/Evellyn.jpeg`,
+  },
+
+  {
+    id: "Eduardo",
+    name: "Eduardo",
+    role: "Jovem Aprendzi",
+    matricula: "#0007",
+    image: `${KNOWN_FACES_URL}/Eduardo.jpeg`,
+  },
+
+  {
+    id: "Leticia",
+    name: "Leticia",
+    role: "Jovem Aprendzi",
+    matricula: "#0008",
+    image: `${KNOWN_FACES_URL}/Leticia.jpeg`,
   },
 ];
