@@ -11,7 +11,7 @@ export default defineConfig({
   // desse prefixo pra não dar 404. Em código, use import.meta.env.BASE_URL
   // em vez de escrever esse caminho na mão (ver src/lib/faceRecognition.ts
   // e src/data/knownPeople.ts).
-  base: '/RelogioDePonto/',
+  base: process.env.VERCEL ? '/' : '/RelogioDePonto/',
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
