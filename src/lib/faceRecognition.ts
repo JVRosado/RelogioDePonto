@@ -99,29 +99,35 @@ export async function initKnownFaces(people: KnownPerson[]): Promise<void> {
   await loadFaceModels();
   knownPeople = people;
 
-  const labeled: faceapi.LabeledFaceDescriptors[] = [];
-  for (const person of people) {
+  const labeled = await Promise.all(people.map(async (person) => {
     try {
       const img = await faceapi.fetchImage(person.image); // baixa a foto de public/known-faces/
       const descriptor = await describeInput(img);
       if (descriptor) {
         // "LabeledFaceDescriptors" associa o descritor ao id da pessoa, pra
         // depois o FaceMatcher conseguir dizer QUEM foi reconhecido.
-        labeled.push(new faceapi.LabeledFaceDescriptors(person.id, [descriptor]));
+        return new faceapi.LabeledFaceDescriptors(person.id, [descriptor]);
       } else {
         console.warn(`Nenhum rosto detectado na foto de referência de "${person.name}" (${person.image}).`);
+        return null;
       }
     } catch (err) {
       // Acontece, por exemplo, quando o arquivo não existe (404) ou o nome
       // do arquivo em knownPeople.ts não bate exatamente com o que está em
       // public/known-faces/ (maiúsculas/minúsculas e extensão importam).
       console.warn(`Não foi possível carregar a foto de referência de "${person.name}" (${person.image}).`, err);
+      return null;
     }
-  }
+  }));
+  const validLabeled = labeled.filter(
+    (face): face is faceapi.LabeledFaceDescriptors => face !== null
+  );
 
   // Se ninguém tiver descritor válido, `matcher` fica null e recognizeFace()
   // sempre vai retornar "não reconhecido" (em vez de dar erro).
-  matcher = labeled.length > 0 ? new faceapi.FaceMatcher(labeled, MATCH_THRESHOLD) : null;
+  matcher = validLabeled.length > 0
+    ? new faceapi.FaceMatcher(validLabeled, MATCH_THRESHOLD)
+    : null;
 }
 
 /**
